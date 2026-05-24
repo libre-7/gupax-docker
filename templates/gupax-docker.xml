@@ -33,151 +33,25 @@
   <ExtraParams></ExtraParams>
   <PostArgs></PostArgs>
 
-  <!-- ============================================================ -->
-  <!-- Environment Variables                                        -->
-  <!-- ============================================================ -->
-  <Environment>
-    <Variable>
-      <Name>TOR_ENABLED</Name>
-      <Value>false</Value>
-      <Mode></Mode>
-      <Description>Enable Tor hidden service for Monero transaction broadcast (tx-only mode, P2P sync stays on clearnet)</Description>
-      <Display>always</Display>
-      <Required>false</Required>
-      <Mask>false</Mask>
-    </Variable>
-    <Variable>
-      <Name>VNC_AUTH_TOKEN</Name>
-      <Value></Value>
-      <Mode></Mode>
-      <Description>Password for VNC web interface access (leave empty for no authentication)</Description>
-      <Display>always</Display>
-      <Required>false</Required>
-      <Mask>true</Mask>
-    </Variable>
-    <Variable>
-      <Name>PUID</Name>
-      <Value>99</Value>
-      <Mode></Mode>
-      <Description>User ID for file permissions (Unraid default: 99)</Description>
-      <Display>advanced</Display>
-      <Required>false</Required>
-      <Mask>false</Mask>
-    </Variable>
-    <Variable>
-      <Name>PGID</Name>
-      <Value>100</Value>
-      <Mode></Mode>
-      <Description>Group ID for file permissions (Unraid default: 100)</Description>
-      <Display>advanced</Display>
-      <Required>false</Required>
-      <Mask>false</Mask>
-    </Variable>
-    <Variable>
-      <Name>SCREEN_RESOLUTION</Name>
-      <Value>1920x1080x24</Value>
-      <Mode></Mode>
-      <Description>Display resolution for Gupax GUI inside the container (default: 1920x1080x24)</Description>
-      <Display>advanced</Display>
-      <Required>false</Required>
-      <Mask>false</Mask>
-    </Variable>
-    <Variable>
-      <Name>MONERO_RPC_RESTRICTED</Name>
-      <Value>true</Value>
-      <Mode></Mode>
-      <Description>Restrict RPC to safe, view-only commands (default: true). Set to false only if you need full RPC access for external wallets.</Description>
-      <Display>advanced</Display>
-      <Required>false</Required>
-      <Mask>false</Mask>
-    </Variable>
-  </Environment>
+  <Config Name="TOR_ENABLED" Target="TOR_ENABLED" Type="Variable" Default="false" Description="Enable Tor hidden service for Monero transaction broadcast (tx-only mode, P2P sync stays on clearnet)" Mode="" Display="always" Required="false" Mask="false"/>
+  <Config Name="VNC_AUTH_TOKEN" Target="VNC_AUTH_TOKEN" Type="Variable" Default="" Description="Password for VNC web interface access (leave empty for no authentication)" Mode="" Display="always" Required="false" Mask="true"/>
+  <Config Name="PUID" Target="PUID" Type="Variable" Default="99" Description="User ID for file permissions (Unraid default: 99)" Mode="" Display="advanced" Required="false" Mask="false"/>
+  <Config Name="PGID" Target="PGID" Type="Variable" Default="100" Description="Group ID for file permissions (Unraid default: 100)" Mode="" Display="advanced" Required="false" Mask="false"/>
+  <Config Name="SCREEN_RESOLUTION" Target="SCREEN_RESOLUTION" Type="Variable" Default="1920x1080x24" Description="Display resolution for Gupax GUI inside the container (default: 1920x1080x24)" Mode="" Display="advanced" Required="false" Mask="false"/>
+  <Config Name="MONERO_RPC_RESTRICTED" Target="MONERO_RPC_RESTRICTED" Type="Variable" Default="true" Description="Restrict RPC to safe, view-only commands (default: true). Set to false only if you need full RPC access for external wallets." Mode="" Display="advanced" Required="false" Mask="false"/>
 
-  <!-- ============================================================ -->
-  <!-- Ports                                                        -->
-  <!-- ============================================================ -->
-  <Ports>
-    <Port>
-      <HostPort>6080</HostPort>
-      <ContainerPort>6080</ContainerPort>
-      <Protocol>tcp</Protocol>
-      <Description>noVNC web interface - connect your browser here</Description>
-      <Display>always</Display>
-    </Port>
-    <Port>
-      <HostPort>5900</HostPort>
-      <ContainerPort>5900</ContainerPort>
-      <Protocol>tcp</Protocol>
-      <Description>VNC server — disabled by default. Only enable if VNC_AUTH_TOKEN is set (exposing unprotected VNC gives full GUI control)</Description>
-      <Display>advanced</Display>
-    </Port>
-    <Port>
-      <HostPort>3333</HostPort>
-      <ContainerPort>3333</ContainerPort>
-      <Protocol>tcp</Protocol>
-      <Description>P2Pool Stratum - Connect external miners here</Description>
-      <Display>advanced</Display>
-    </Port>
-    <Port>
-      <HostPort>37889</HostPort>
-      <ContainerPort>37889</ContainerPort>
-      <Protocol>tcp</Protocol>
-      <Description>P2Pool P2P (p2pool peer connections)</Description>
-      <Display>advanced</Display>
-    </Port>
-    <Port>
-      <HostPort>18080</HostPort>
-      <ContainerPort>18080</ContainerPort>
-      <Protocol>tcp</Protocol>
-      <Description>Monero P2P Network</Description>
-      <Display>advanced</Display>
-    </Port>
-    <Port>
-      <HostPort>18081</HostPort>
-      <ContainerPort>18081</ContainerPort>
-      <Protocol>tcp</Protocol>
-      <Description>Monero RPC</Description>
-      <Display>advanced</Display>
-    </Port>
-  </Ports>
+  <Config Name="WebUI" Target="6080" Type="Port" Default="6080" Description="noVNC web interface - connect your browser here" Mode="tcp" Display="always" Required="false" Mask="false"/>
+  <Config Name="VNC" Target="5900" Type="Port" Default="5900" Description="VNC server — disabled by default. Only enable if VNC_AUTH_TOKEN is set (exposing unprotected VNC gives full GUI control)" Mode="tcp" Display="advanced" Required="false" Mask="false"/>
+  <Config Name="P2Pool Stratum" Target="3333" Type="Port" Default="3333" Description="P2Pool Stratum - Connect external miners here" Mode="tcp" Display="advanced" Required="false" Mask="false"/>
+  <Config Name="P2Pool P2P" Target="37889" Type="Port" Default="37889" Description="P2Pool P2P (p2pool peer connections)" Mode="tcp" Display="advanced" Required="false" Mask="false"/>
+  <Config Name="Monero P2P" Target="18080" Type="Port" Default="18080" Description="Monero P2P Network" Mode="tcp" Display="advanced" Required="false" Mask="false"/>
+  <Config Name="Monero RPC" Target="18081" Type="Port" Default="18081" Description="Monero RPC" Mode="tcp" Display="advanced" Required="false" Mask="false"/>
 
-  <!-- ============================================================ -->
-  <!-- Volumes                                                      -->
-  <!-- ============================================================ -->
-  <Volumes>
-    <Volume>
-      <HostDir>/mnt/user/appdata/gupax/config</HostDir>
-      <ContainerDir>/home/miner/.local/state/gupax</ContainerDir>
-      <Mode>rw</Mode>
-      <Description>Gupax configuration and state (wallet, settings persist here)</Description>
-      <Display>always</Display>
-    </Volume>
-    <Volume>
-      <HostDir>/mnt/user/appdata/gupax/share</HostDir>
-      <ContainerDir>/home/miner/.local/share/gupax</ContainerDir>
-      <Mode>rw</Mode>
-      <Description>Downloaded mining binaries (P2Pool, XMRig, monerod) — persist across container updates</Description>
-      <Display>always</Display>
-    </Volume>
-    <Volume>
-      <HostDir>/mnt/user/appdata/gupax/monero</HostDir>
-      <ContainerDir>/home/miner/.bitmonero</ContainerDir>
-      <Mode>rw</Mode>
-      <Description>Monero blockchain data. In Gupax UI, go to Node tab and set database path to /home/miner/.bitmonero</Description>
-      <Display>always</Display>
-    </Volume>
-    <Volume>
-      <HostDir>/mnt/user/appdata/gupax/tor</HostDir>
-      <ContainerDir>/home/miner/.tor</ContainerDir>
-      <Mode>rw</Mode>
-      <Description>Tor hidden service keys (keeps the same .onion address across container restarts)</Description>
-      <Display>always</Display>
-    </Volume>
-  </Volumes>
+  <Config Name="Gupax config" Target="/home/miner/.local/state/gupax" Type="Path" Default="/mnt/user/appdata/gupax/config" Mode="rw" Description="Gupax configuration and state (wallet, settings persist here)" Display="always" Required="false" Mask="false"/>
+  <Config Name="Gupax share" Target="/home/miner/.local/share/gupax" Type="Path" Default="/mnt/user/appdata/gupax/share" Mode="rw" Description="Downloaded mining binaries (P2Pool, XMRig, monerod) — persist across container updates" Display="always" Required="false" Mask="false"/>
+  <Config Name="Monero blockchain" Target="/home/miner/.bitmonero" Type="Path" Default="/mnt/user/appdata/gupax/monero" Mode="rw" Description="Monero blockchain data. In Gupax UI, go to Node tab and set database path to /home/miner/.bitmonero" Display="always" Required="false" Mask="false"/>
+  <Config Name="Tor keys" Target="/home/miner/.tor" Type="Path" Default="/mnt/user/appdata/gupax/tor" Mode="rw" Description="Tor hidden service keys (keeps the same .onion address across container restarts)" Display="always" Required="false" Mask="false"/>
 
-  <!-- ============================================================ -->
-  <!-- Resource Limits (recommended for Unraid)                    -->
-  <!-- ============================================================ -->
   <Deploy>
     <Resources>
       <Limit>
@@ -187,14 +61,8 @@
     </Resources>
   </Deploy>
 
-  <!-- ============================================================ -->
-  <!-- Restart Policy                                               -->
-  <!-- ============================================================ -->
   <RestartPolicy>unless-stopped</RestartPolicy>
 
-  <!-- ============================================================ -->
-  <!-- Logging                                                      -->
-  <!-- ============================================================ -->
   <LogFile></LogFile>
   <LogDisplayFile>/dev/null</LogDisplayFile>
   <LogReader>true</LogReader>
@@ -208,6 +76,8 @@
 - noVNC web interface on port 6080.
 - VNC_AUTH_TOKEN for optional web authentication.
 - P2Pool + XMRig via Gupax v2.0.1 GUI.
+### 2026.05.23
+- Fixed template format for Unraid v2 schema (Config elements with Type attribute).
   </Changes>
 
 </Container>
