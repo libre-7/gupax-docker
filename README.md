@@ -128,8 +128,7 @@ You'll see output like:
 
 [+] Recommended monerod arguments (Gupax → Node → Arguments):
     --restricted-rpc
-    --no-igd
-    --tx-proxy=tor,127.0.0.1:9050
+    --tx-proxy=socks5://127.0.0.1:9050
     --anonymous-inbound=dqwj5fyc...onion:18084,127.0.0.1:18086,40
 ```
 
@@ -150,13 +149,13 @@ You'll see output like:
 **5. Paste the four Tor arguments** from the log output (after the `--data-dir` fix):
 
 ```
---restricted-rpc --no-igd --tx-proxy=tor,127.0.0.1:9050 --anonymous-inbound=dqwj5fyc...onion:18084,127.0.0.1:18086,40
+--restricted-rpc --tx-proxy=socks5://127.0.0.1:9050 --anonymous-inbound=dqwj5fyc...onion:18084,127.0.0.1:18086,40
 ```
 
 The complete Start options line should look like:
 
 ```
---data-dir /home/miner/.bitmonero --zmq-pub tcp://127.0.0.1:18083 --rpc-bind-ip 127.0.0.1 --rpc-bind-port 18081 --out-peers 8 --in-peers 16 --log-level 0 --sync-pruned-blocks --enable-dns-blocklist --disable-dns-checkpoints --prune-blockchain --restricted-rpc --no-igd --tx-proxy=tor,127.0.0.1:9050 --anonymous-inbound=dqwj5fyc...onion:18084,127.0.0.1:18086,40
+--data-dir /home/miner/.bitmonero --zmq-pub tcp://127.0.0.1:18083 --rpc-bind-ip 127.0.0.1 --rpc-bind-port 18081 --out-peers 8 --in-peers 16 --log-level 0 --sync-pruned-blocks --enable-dns-blocklist --disable-dns-checkpoints --prune-blockchain --restricted-rpc --tx-proxy=socks5://127.0.0.1:9050 --anonymous-inbound=dqwj5fyc...onion:18084,127.0.0.1:18086,40
 ```
 
 **6. Click Save** (Gupax does not auto-save — if you skip this, the arguments are lost on restart)
@@ -193,7 +192,7 @@ Once monerod is running, you can connect any Monero wallet through the same `.on
 monero-wallet-cli --daemon-address <onion>:18081 --proxy 127.0.0.1:9050
 ```
 
-> **How it works:** The hidden service maps `:18081` directly to monerod's JSON-RPC at `127.0.0.1:18081`. Wallet sync (`get_blocks.bin`) and transaction submission (`send_raw_transaction`) both flow through this port. Transaction broadcast from monerod to the network uses `--tx-proxy=tor,...` to route through SOCKS5.
+> **How it works:** The hidden service maps `:18081` directly to monerod's JSON-RPC at `127.0.0.1:18081`. Wallet sync (`get_blocks.bin`) and transaction submission (`send_raw_transaction`) both flow through this port. Transaction broadcast from monerod to the network uses `--tx-proxy=socks5://127.0.0.1:9050` to route through SOCKS5.
 
 ---
 ## 🖥️ Unraid Setup
