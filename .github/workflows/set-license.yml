@@ -1,0 +1,23 @@
+name: Set Docker Hub License
+
+on:
+  workflow_dispatch:
+
+jobs:
+  set-license:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Set license to GPL-3.0 via Docker Hub API
+        env:
+          DOCKER_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+          DOCKER_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+          REPO: libre7/gupax-docker
+        run: |
+          curl -sfS -X PATCH "https://hub.docker.com/v2/repositories/${REPO}/" \
+            -H "Content-Type: application/json" \
+            -u "${DOCKER_USERNAME}:${DOCKER_TOKEN}" \
+            -d '{"license": "GPL-3.0"}'
+          echo "---"
+          curl -sfS "https://hub.docker.com/v2/repositories/${REPO}/" \
+            -u "${DOCKER_USERNAME}:${DOCKER_TOKEN}" \
+            | python3 -c "import json,sys; d=json.load(sys.stdin); print('license:', d.get('license')); print('full_description:', d.get('full_description','')[:80])"
