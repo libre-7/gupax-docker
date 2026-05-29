@@ -7,17 +7,46 @@ jobs:
   set-license:
     runs-on: ubuntu-latest
     steps:
-      - name: Set license to GPL-3.0 via Docker Hub API
+      - name: Set license via Docker Hub API
         env:
           DOCKER_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
-          DOCKER_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
-          REPO: libre7/gupax-docker
+          DOCKER_PASSWORD: ${{ secrets.DOCKERHUB_TOKEN }}
         run: |
-          curl -sfS -X PATCH "https://hub.docker.com/v2/repositories/${REPO}/" \
-            -H "Content-Type: application/json" \
-            -u "${DOCKER_USERNAME}:${DOCKER_TOKEN}" \
-            -d '{"license": "GPL-3.0"}'
-          echo "---"
-          curl -sfS "https://hub.docker.com/v2/repositories/${REPO}/" \
-            -u "${DOCKER_USERNAME}:${DOCKER_TOKEN}" \
-            | python3 -c "import json,sys; d=json.load(sys.stdin); print('license:', d.get('license')); print('full_description:', d.get('full_description','')[:80])"
+          python3 << 'PYEOF'
+import urllib.request, json, os
+
+user = os.environ["DOCKER_USERNAME"]
+pwd = os.environ["DOCKER_PASSWORD"]
+repo = "libre7/gupax-docker"
+license_id = "GPL-3.0"
+
+# Login for JWT
+req = urllib.request.Request(
+    "https://hub.docker.com/v2/users/login/",
+    data=json.dumps({"username": user, "password": pwd}).encode(),
+    headers={"Content-Type": "application/json"}
+)
+token = json.loads(urllib.request.urlopen(req).read())["token"]
+print("Got JWT token")
+
+# PATCH license
+req = urllib.request.Request(
+    f"https://hub.docker.com/v2/repositories/{repo}/",
+    data=json.dumps({"license": license_id}).encode(),
+    headers={
+        "Content-Type": "application/json",
+        "Authorization": f"Bearer {token}"
+    },
+    method="PATCH"
+)
+urllib.request.urlopen(req)
+print("License set successfully")
+
+# Verify
+req = urllib.request.Request(
+    f"https://hub.docker.com/v2/repositories/{repo}/",
+    headers={"Authorization": f"Bearer {token}"}
+)
+data = json.loads(urllib.request.urlopen(req).read())
+print(f"license: {data.get('license')}")
+PYEOF
