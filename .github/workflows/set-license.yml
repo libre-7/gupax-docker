@@ -13,40 +13,40 @@ jobs:
           DOCKER_PASSWORD: ${{ secrets.DOCKERHUB_TOKEN }}
         run: |
           python3 << 'PYEOF'
-import urllib.request, json, os
+          import urllib.request, json, os
 
-user = os.environ["DOCKER_USERNAME"]
-pwd = os.environ["DOCKER_PASSWORD"]
-repo = "libre7/gupax-docker"
-license_id = "GPL-3.0"
+          user = os.environ["DOCKER_USERNAME"]
+          pwd = os.environ["DOCKER_PASSWORD"]
+          repo = "libre7/gupax-docker"
+          license_id = "GPL-3.0"
 
-# Login for JWT
-req = urllib.request.Request(
-    "https://hub.docker.com/v2/users/login/",
-    data=json.dumps({"username": user, "password": pwd}).encode(),
-    headers={"Content-Type": "application/json"}
-)
-token = json.loads(urllib.request.urlopen(req).read())["token"]
-print("Got JWT token")
+          # Login for JWT
+          req = urllib.request.Request(
+              "https://hub.docker.com/v2/users/login/",
+              data=json.dumps({"username": user, "password": pwd}).encode(),
+              headers={"Content-Type": "application/json"}
+          )
+          token = json.loads(urllib.request.urlopen(req).read())["token"]
+          print("Got JWT token")
 
-# PATCH license
-req = urllib.request.Request(
-    f"https://hub.docker.com/v2/repositories/{repo}/",
-    data=json.dumps({"license": license_id}).encode(),
-    headers={
-        "Content-Type": "application/json",
-        "Authorization": f"Bearer {token}"
-    },
-    method="PATCH"
-)
-urllib.request.urlopen(req)
-print("License set successfully")
+          # PATCH license
+          req = urllib.request.Request(
+              f"https://hub.docker.com/v2/repositories/{repo}/",
+              data=json.dumps({"license": license_id}).encode(),
+              headers={
+                  "Content-Type": "application/json",
+                  "Authorization": f"Bearer {token}"
+              },
+              method="PATCH"
+          )
+          urllib.request.urlopen(req)
+          print("License set successfully")
 
-# Verify
-req = urllib.request.Request(
-    f"https://hub.docker.com/v2/repositories/{repo}/",
-    headers={"Authorization": f"Bearer {token}"}
-)
-data = json.loads(urllib.request.urlopen(req).read())
-print(f"license: {data.get('license')}")
-PYEOF
+          # Verify
+          req = urllib.request.Request(
+              f"https://hub.docker.com/v2/repositories/{repo}/",
+              headers={"Authorization": f"Bearer {token}"}
+          )
+          data = json.loads(urllib.request.urlopen(req).read())
+          print(f"license: {data.get('license')}")
+          PYEOF
