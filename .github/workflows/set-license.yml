@@ -7,7 +7,7 @@ jobs:
   set-license:
     runs-on: ubuntu-latest
     steps:
-      - name: Set license via Docker Hub API
+      - name: Set license via Docker Hub API (full debug)
         env:
           DOCKER_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
           DOCKER_PASSWORD: ${{ secrets.DOCKERHUB_TOKEN }}
@@ -30,6 +30,7 @@ jobs:
           print("Got JWT token")
 
           # PATCH license
+          print("PATCH response...")
           req = urllib.request.Request(
               f"https://hub.docker.com/v2/repositories/{repo}/",
               data=json.dumps({"license": license_id}).encode(),
@@ -39,14 +40,24 @@ jobs:
               },
               method="PATCH"
           )
-          urllib.request.urlopen(req)
-          print("License set successfully")
+          resp = urllib.request.urlopen(req)
+          print(f"PATCH status: {resp.status}")
+          patched_data = json.loads(resp.read())
+          print(f"PATCH response keys: {list(patched_data.keys())}")
+          print(f"license from PATCH response: {patched_data.get('license')}")
 
-          # Verify
+          # Verify - dump ALL keys related to licensing
+          print("\n--- GET response ---")
           req = urllib.request.Request(
               f"https://hub.docker.com/v2/repositories/{repo}/",
               headers={"Authorization": f"Bearer {token}"}
           )
           data = json.loads(urllib.request.urlopen(req).read())
-          print(f"license: {data.get('license')}")
+          license_keys = [k for k in data if 'license' in k.lower()]
+          print(f"License-related keys: {license_keys}")
+          for k in sorted(data.keys()):
+              v = data[k]
+              if isinstance(v, str) and len(v) > 80:
+                  v = v[:80] + "..."
+              print(f"  {k}: {v}")
           PYEOF
