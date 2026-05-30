@@ -197,7 +197,6 @@ TORRC
         # the Node tab from showing green and blocking P2Pool startup.
         # P2Pool v4.x also rejects --rpc-login=user:pass (= syntax).
         # Use --restricted-rpc for loopback-only RPC access (sufficient here).
-        echo "    --no-igd"
         echo "    --tx-proxy=tor,127.0.0.1:9050"
         echo "    --anonymous-inbound=${HS_KEY}:18084,127.0.0.1:18086,40"
         # Persist for reference across container restarts
@@ -212,7 +211,6 @@ TORRC
         fi
         # --rpc-login omitted: Gupax watchdog has no auth support (HTTP 401).
         # --restricted-rpc is sufficient for loopback-only RPC access.
-        echo "  --no-igd" >> /home/miner/.tor/monerod_onion.txt
         echo "  --tx-proxy=tor,127.0.0.1:9050" >> /home/miner/.tor/monerod_onion.txt
         echo "  --anonymous-inbound=${HS_KEY}:18084,127.0.0.1:18086,40" >> /home/miner/.tor/monerod_onion.txt
     fi
