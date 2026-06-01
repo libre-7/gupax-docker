@@ -6,7 +6,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 Versions follow the scheme `v{upstream-gupax}-{build-date}`. The base version
 tracks which Gupax release is bundled; the date suffix differentiates container
-builds. `v2.0.1` and `v2.0.1+YYYYMMDD` tags are Docker image tags — the
+builds. `v2.0.1` and `v2.0.1-YYYYMMDD` tags are Docker image tags — the
 `v`-prefixed tag is a moving tag that always points to the latest build of that
 upstream release.
 

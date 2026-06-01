@@ -6,7 +6,7 @@
 [![Docker Hub](https://img.shields.io/docker/pulls/libre7/gupax-docker?style=flat-square&color=blue&logo=docker)](https://hub.docker.com/r/libre7/gupax-docker)
 [![Image Size](https://img.shields.io/docker/image-size/libre7/gupax-docker/latest?style=flat-square&logo=docker&color=blueviolet)](https://hub.docker.com/r/libre7/gupax-docker)
 
-> Docker packaging for [Gupax](https://github.com/hinto-janai/gupax) — the GUI that unites [P2Pool](https://github.com/SChernykh/p2pool) and [XMRig](https://github.com/xmrig/xmrig) for easy, decentralized Monero mining. Optional built-in **🧅 Tor hidden service** for private transaction relay.
+> Docker packaging for [Gupax](https://github.com/gupax-io/gupax) — the GUI that unites [P2Pool](https://github.com/SChernykh/p2pool) and [XMRig](https://github.com/xmrig/xmrig) for easy, decentralized Monero mining. Optional built-in **🧅 Tor hidden service** for private transaction relay.
 
 **Self-contained with noVNC** — access the Gupax GUI directly from your web browser. No X11 server or additional setup needed.
 
@@ -468,7 +468,7 @@ P2Pool get_info RPC request to host 127.0.0.1:RPC 18081:ZMQ 18083 failed: Error 
 
 ## 🔗 Official Resources
 
-- [Gupax](https://github.com/hinto-janai/gupax) — The GUI unifying P2Pool & XMRig
+- [Gupax](https://github.com/gupax-io/gupax) — The GUI unifying P2Pool & XMRig
 - [P2Pool](https://github.com/SChernykh/p2pool) — Decentralized Monero mining pool
 - [XMRig](https://github.com/xmrig/xmrig) — High-performance Monero miner
 - [Monero](https://www.getmonero.org/) — Private, decentralized cryptocurrency

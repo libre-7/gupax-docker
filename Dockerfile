@@ -87,7 +87,7 @@ RUN printf '#!/bin/sh\nexec sudo "$@"\n' > /usr/local/bin/pkexec \
 # Install standalone Gupax (Gupax GUI only — binaries downloaded at runtime)
 # Gupax downloads P2Pool, XMRig, monerod, and xmrig-proxy internally.
 # Downloaded binaries are persisted in /home/miner/.local/share/gupax
-# via a named volume (gupax-share) so they survive container restarts.
+# via a named volume (gupax-data) so they survive container restarts.
 # =============================================================================
 
 WORKDIR /tmp/install
