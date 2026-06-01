@@ -17,7 +17,7 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v4
@@ -27,6 +27,13 @@ jobs:
         with:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Build date
+        id: date
+        run: |
+          BUILD_DATE=$(date +%Y%m%d)
+          echo "BUILD_DATE=$BUILD_DATE" >> $GITHUB_ENV
+          echo "Build date: $BUILD_DATE"
 
       - name: Detect Gupax version from upstream
         id: version
@@ -40,28 +47,32 @@ jobs:
           SAFE_REF=$(echo "${{ github.ref_name }}" | tr '/' '-')
           # Tag strategy:
           #   :latest / :2.0.1 / :v2.0.1  — moving, always latest build
-          #   :v2.0.1-20260518             — date-stamped, immutable
+          #   :v2.0.1-YYYYMMDD             — date-stamped, immutable
           #   :<sha>                       — commit-pinned, immutable
           if [ "${{ github.ref_name }}" = "main" ]; then
-            TAGS="${{ env.IMAGE_NAME }}:latest"$'\n'"${{ env.IMAGE_NAME }}:$VERSION_STRIPPED"$'\n'"${{ env.IMAGE_NAME }}:$VERSION"$'\n'"${{ env.IMAGE_NAME }}:${VERSION}-20260518"$'\n'"${{ env.IMAGE_NAME }}:${{ github.sha }}"
+            TAGS="${{ env.IMAGE_NAME }}:latest"$'\n'"${{ env.IMAGE_NAME }}:$VERSION_STRIPPED"$'\n'"${{ env.IMAGE_NAME }}:$VERSION"$'\n'"${{ env.IMAGE_NAME }}:${VERSION}-$BUILD_DATE"$'\n'"${{ env.IMAGE_NAME }}:${{ github.sha }}"
           else
             TAGS="${{ env.IMAGE_NAME }}:${SAFE_REF}"$'\n'"${{ env.IMAGE_NAME }}:${SAFE_REF}-${{ github.sha }}"
           fi
           echo "Tags: $TAGS"
           echo "VERSION=$VERSION" >> $GITHUB_ENV
+          echo "BUILD_DATE=$BUILD_DATE" >> $GITHUB_ENV
           echo "TAGS<<EOF"$'\n'"$TAGS"$'\n'"EOF" >> $GITHUB_ENV
 
       - name: Build and push to Docker Hub
         uses: docker/build-push-action@v7
         env:
           GUPAX_VERSION: ${{ env.VERSION }}
+          BUILD_DATE: ${{ env.BUILD_DATE }}
         with:
           context: .
           file: ./Dockerfile
           push: true
           platforms: linux/amd64
           tags: ${{ env.TAGS }}
-          build-args: GUPAX_VERSION
+          build-args: |
+            GUPAX_VERSION
+            BUILD_DATE
           cache-from: type=gha
           cache-to: type=gha,mode=max
           provenance: mode=max

@@ -18,7 +18,7 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v4
@@ -33,38 +33,49 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Build date
+        id: date
+        run: |
+          BUILD_DATE=$(date +%Y%m%d)
+          echo "BUILD_DATE=$BUILD_DATE" >> $GITHUB_ENV
+          echo "Build date: $BUILD_DATE"
+
       - name: Detect Gupax version for tagging
         id: version
         run: |
-          VERSION=$(curl -s https://api.github.com/repos/gupax-io/gupax/releases/latest | python3 -c "import json,sys; print(json.load(sys.stdin)['tag_name'])")
+          VERSION=$(curl -s https://api.github.com/repos/gupax-io/gupax/releases/latest | python3 -c "import json,sys; print(json.load(sys.stdin)['tag_name'])" )
           VERSION_STRIPPED="${VERSION#v}"
           echo "Detected Gupax version: $VERSION (tag: $VERSION_STRIPPED)"
           # Branch-aware tagging. Slashes -> hyphens (invalid in Docker tags).
           SAFE_REF=$(echo "${{ github.ref_name }}" | tr '/' '-')
           # Tag strategy:
           #   :latest / :2.0.1 / :v2.0.1  — moving, always latest build
-          #   :v2.0.1-20260518             — date-stamped, immutable
+          #   :v2.0.1-YYYYMMDD             — date-stamped, immutable
           #   :<sha>                       — commit-pinned, immutable
           if [ "${{ github.ref_name }}" = "main" ]; then
-            TAGS="${{ env.IMAGE_NAME }}:latest"$'\n'"${{ env.IMAGE_NAME }}:$VERSION_STRIPPED"$'\n'"${{ env.IMAGE_NAME }}:$VERSION"$'\n'"${{ env.IMAGE_NAME }}:${VERSION}-20260518"$'\n'"${{ env.IMAGE_NAME }}:${{ github.sha }}"
+            TAGS="${{ env.IMAGE_NAME }}:latest"$'\n'"${{ env.IMAGE_NAME }}:$VERSION_STRIPPED"$'\n'"${{ env.IMAGE_NAME }}:$VERSION"$'\n'"${{ env.IMAGE_NAME }}:${VERSION}-$BUILD_DATE"$'\n'"${{ env.IMAGE_NAME }}:${{ github.sha }}"
           else
             TAGS="${{ env.IMAGE_NAME }}:${SAFE_REF}"$'\n'"${{ env.IMAGE_NAME }}:${SAFE_REF}-${{ github.sha }}"
           fi
           echo "Tags: $TAGS"
           echo "VERSION=$VERSION" >> $GITHUB_ENV
+          echo "BUILD_DATE=$BUILD_DATE" >> $GITHUB_ENV
           echo "TAGS<<EOF"$'\n'"$TAGS"$'\n'"EOF" >> $GITHUB_ENV
 
       - name: Build and push Docker image
         uses: docker/build-push-action@v7
         env:
           GUPAX_VERSION: ${{ env.VERSION }}
+          BUILD_DATE: ${{ env.BUILD_DATE }}
         with:
           context: .
           file: ./Dockerfile
           push: true
           platforms: linux/amd64
           tags: ${{ env.TAGS }}
-          build-args: GUPAX_VERSION
+          build-args: |
+            GUPAX_VERSION
+            BUILD_DATE
           cache-from: type=gha
           cache-to: type=gha,mode=max
           provenance: mode=max

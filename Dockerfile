@@ -87,7 +87,7 @@ RUN printf '#!/bin/sh\nexec sudo "$@"\n' > /usr/local/bin/pkexec \
 # Install standalone Gupax (Gupax GUI only — binaries downloaded at runtime)
 # Gupax downloads P2Pool, XMRig, monerod, and xmrig-proxy internally.
 # Downloaded binaries are persisted in /home/miner/.local/share/gupax
-# via a named volume (gupax-share) so they survive container restarts.
+# via a named volume (gupax-data) so they survive container restarts.
 # =============================================================================
 
 WORKDIR /tmp/install
@@ -97,6 +97,7 @@ WORKDIR /tmp/install
 # For reproducibility, the SHA256 is fetched from upstream SHA256SUMS
 # at build time — the image build fails if verification fails.
 ARG GUPAX_VERSION=v2.0.1
+ARG BUILD_DATE=unknown
 RUN TARBALL="gupax-${GUPAX_VERSION}-linux-x64.tar.gz" \
     && echo "[*] Downloading Gupax ${GUPAX_VERSION}..." \
     && curl -fsSL "https://github.com/gupax-io/gupax/releases/download/${GUPAX_VERSION}/${TARBALL}" -o "${TARBALL}" \
@@ -111,12 +112,17 @@ RUN TARBALL="gupax-${GUPAX_VERSION}-linux-x64.tar.gz" \
     && rm -rf "${TARBALL}" "${TARBALL}.sha256" SHA256SUMS "gupax-${GUPAX_VERSION}-linux-x64" /tmp/install
 
 # Labels
-LABEL maintainer="libre-7" \
-      description="Gupax — GUI for P2Pool + XMRig Monero mining in Docker (noVNC enabled, standalone binaries + optional Tor)" \
+LABEL org.opencontainers.image.title="gupax-docker" \
+      org.opencontainers.image.description="noVNC-enabled Docker image for Gupax — GUI for P2Pool + XMRig Monero mining with optional Tor" \
+      org.opencontainers.image.vendor="libre-7" \
+      org.opencontainers.image.url="https://github.com/libre-7/gupax-docker" \
       org.opencontainers.image.source="https://github.com/libre-7/gupax-docker" \
-      org.opencontainers.image.icon="https://raw.githubusercontent.com/gupax-io/gupax/main/assets/images/icons/icon.png" \
-      org.opencontainers.image.version="${GUPAX_VERSION}-20260518" \
+      org.opencontainers.image.documentation="https://github.com/libre-7/gupax-docker" \
+      org.opencontainers.image.version="${GUPAX_VERSION}-${BUILD_DATE}" \
       org.opencontainers.image.licenses="GPL-3.0" \
+      org.opencontainers.image.icon="https://raw.githubusercontent.com/gupax-io/gupax/main/assets/images/icons/icon.png" \
+      maintainer="libre-7" \
+      description="Gupax — GUI for P2Pool + XMRig Monero mining in Docker (noVNC enabled, standalone binaries + optional Tor)" \
       gupax.version="${GUPAX_VERSION}"
 
 

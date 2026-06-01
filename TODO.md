@@ -13,7 +13,8 @@
 - [x] **Blockchain volume** — Mount existing Monero blockchain at `/home/miner/.bitmonero`
 - [x] **PR test pipeline** — Lint (shellcheck + hadolint + yamllint) + smoke test on PRs
 - [x] **GHCR + Docker Hub CI** — Image builds pushed to both registries on merge to main
-- [ ] **Multi-arch builds** — Support `linux/arm64` if Gupax provides arm64 binary
+- [x] **Multi-arch builds** — Support `linux/arm64` if Gupax provides arm64 binary
+- [x] **CONTRIBUTING.md** — How to submit PRs and report issues
 - [ ] **X11 troubleshooting docs** — Expand troubleshooting for common noVNC issues
 - [ ] **GitHub Releases** — Tagged releases with release notes
 
@@ -30,7 +31,7 @@
 
 - [x] **README.md** — Quick Start, noVNC setup, configuration, troubleshooting
 - [x] **CHANGELOG.md** — Track changes per release
-- [ ] **CONTRIBUTING.md** — How to submit PRs and report issues
+
 - [ ] **GitHub Issues templates** — Bug report and feature request templates
 
 ## 🧪 Testing & Validation
