@@ -28,7 +28,5 @@ Thumbs.db
 
 # Misc (exclude all markdown except healthcheck.sh)
 *.md
-!entrypoint.sh
-!README.md
 .env
 .env.*

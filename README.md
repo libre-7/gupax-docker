@@ -280,7 +280,7 @@ If you have an existing Monero blockchain on your Unraid server:
 | `MONERO_DATA_PATH` | No | `gupax-monero` | Path (volume name or host path) for Monero blockchain data |
 | `SCREEN_RESOLUTION` | No | `1920x1080x24` | Resolution for the virtual X display (WxHxD format) |
 
-> **Note:** `GUPAX_VERSION` and `GUPAX_SHA256` are managed automatically by the CI workflow — no manual configuration needed. The Docker image is always built with the latest detected upstream Gupax version.
+> **Note:** `GUPAX_VERSION` is managed automatically by the CI workflow — no manual configuration needed. The Docker image is always built with the latest detected upstream Gupax version.
 
 ### Ports
 
