@@ -8,6 +8,7 @@
 # =============================================================================
 
 set -e
+set -o pipefail
 
 # Cleanup function — stops all background processes gracefully
 cleanup() {
@@ -225,7 +226,7 @@ fi
 rm -f /tmp/.X${DISPLAY_NUM#*:}-lock /tmp/.X11-unix/X${DISPLAY_NUM#*:} 2>/dev/null
 
 # Kill any stale Xvfb process still holding the display
-for pid in $(pidof Xvfb 2>/dev/null); do
+for pid in $(pgrep -x Xvfb 2>/dev/null); do
     kill -9 $pid 2>/dev/null && echo "[*] Killed stale Xvfb (PID $pid)" || true
 done
 
