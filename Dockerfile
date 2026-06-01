@@ -97,6 +97,7 @@ WORKDIR /tmp/install
 # For reproducibility, the SHA256 is fetched from upstream SHA256SUMS
 # at build time — the image build fails if verification fails.
 ARG GUPAX_VERSION=v2.0.1
+ARG BUILD_DATE=unknown
 RUN TARBALL="gupax-${GUPAX_VERSION}-linux-x64.tar.gz" \
     && echo "[*] Downloading Gupax ${GUPAX_VERSION}..." \
     && curl -fsSL "https://github.com/gupax-io/gupax/releases/download/${GUPAX_VERSION}/${TARBALL}" -o "${TARBALL}" \
@@ -115,7 +116,7 @@ LABEL maintainer="libre-7" \
       description="Gupax — GUI for P2Pool + XMRig Monero mining in Docker (noVNC enabled, standalone binaries + optional Tor)" \
       org.opencontainers.image.source="https://github.com/libre-7/gupax-docker" \
       org.opencontainers.image.icon="https://raw.githubusercontent.com/gupax-io/gupax/main/assets/images/icons/icon.png" \
-      org.opencontainers.image.version="${GUPAX_VERSION}-20260518" \
+      org.opencontainers.image.version="${GUPAX_VERSION}-${BUILD_DATE}" \
       org.opencontainers.image.licenses="GPL-3.0" \
       gupax.version="${GUPAX_VERSION}"
 
