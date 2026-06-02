@@ -7,8 +7,11 @@
 # Copyright (C) 2024-2026  libre-7
 # =============================================================================
 
+set -e
+set -o pipefail
+
 # NoVNC — always required
-if ! python3 -c "import urllib.request; urllib.request.urlopen('http://localhost:6080/')" 2>/dev/null; then
+if ! python3 -c "import urllib.request; urllib.request.urlopen('http://localhost:6080/', timeout=5)" 2>/dev/null; then
     echo "FAIL: noVNC not responding on port 6080"
     exit 1
 fi
