@@ -11,7 +11,7 @@ jobs:
     name: Lint (Shell + Dockerfile + YAML)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
 
       - name: ShellCheck (start.sh)
         uses: ludeeus/action-shellcheck@2.0.0
@@ -41,7 +41,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v4
