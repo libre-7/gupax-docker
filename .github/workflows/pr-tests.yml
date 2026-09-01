@@ -21,7 +21,7 @@ jobs:
           additional_files: 'start.sh'
 
       - name: Hadolint (Dockerfile)
-        uses: hadolint/hadolint-action@v3.3.0
+        uses: hadolint/hadolint-action@v3.5.0
         with:
           dockerfile: Dockerfile
           failure-threshold: warning
