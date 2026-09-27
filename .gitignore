@@ -8,6 +8,9 @@ Thumbs.db
 .idea/
 .vscode/
 
+# Internal agent planning notes — never commit these to the public repo
+.hermes/
+
 # Docker
 *.tar
 *.tar.gz

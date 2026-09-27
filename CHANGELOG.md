@@ -10,6 +10,78 @@ builds. `v2.0.1` and `v2.0.1-YYYYMMDD` tags are Docker image tags — the
 `v`-prefixed tag is a moving tag that always points to the latest build of that
 upstream release.
 
+## [Unreleased] — 2026-09-27
+
+Comprehensive remediation of issue #68. Registry builds have been broken
+since 2026-07-12; this release restores them.
+
+### Fixed
+
+- **CI release detection assumed semver tags** (#68 / C1) — Upstream marked a
+  non-semver release tag (`critical_update_p2pool`) as its latest release.
+  Both registry workflows fed that tag straight into the Dockerfile, which
+  constructed a 404 asset URL, so every build since 2026-07-12 failed and
+  **both registries have been stuck at the 2026-06-02 image**. New shared
+  script `.github/scripts/detect-gupax-version.sh` selects the newest
+  non-prerelease `v*` semver release and resolves the actual Linux x64 asset
+  filename from that release's `assets[]` instead of constructing it from the
+  tag. It fails loudly if no matching asset exists, so a bad upstream state
+  can never silently publish unparseable tags.
+- **Gupax crash skipped cleanup** (#68 / H1) — Under `set -e`, a non-zero
+  Gupax exit aborted `start.sh` at `wait`, so `cleanup()` never ran and the
+  exit code was lost. The wait is now guarded with `set +e` / `set -e`.
+- **Health check could not detect a dead GUI** (#68 / M1) — The health check
+  only probed websockify's static file server, which keeps serving after
+  x11vnc dies, so the container reported `healthy` with a black screen. It now
+  also probes the VNC port (5900), the `x11vnc` process, and the `gupax`
+  process. Covered by a new PR smoke test that kills x11vnc and asserts the
+  container transitions to `unhealthy`.
+- **Dead `gupax-state` volume** (#68 / H2) — Gupax persists only to
+  `dirs::data_dir()` (`/home/miner/.local/share/gupax`); nothing ever wrote to
+  `/home/miner/.local/state/gupax`. The volume was removed from compose and
+  README, and the misleading Unraid "Gupax config" mapping (described as
+  holding the wallet) was corrected to point at the real path.
+- **Wallet address instructions named the wrong tab** (#68 / H3) — The wallet
+  address is a **P2Pool** field (`state.rs` `P2pool.address`, rendered as
+  "Monero Address"); the Node struct has no such field. README, Unraid
+  template, TODO, and `.env.example` corrected.
+- **Unraid template lost capability hardening** (#68 / M2) — The template
+  applied no `cap_drop`/`cap_add` while compose drops ALL and adds five
+  specific capabilities. `ExtraParams` now carries the same capability set.
+- **`SCREEN_RESOLUTION` accepted degenerate values** — The validation regex
+  admitted `0x0x0` and `0x1080x24`; each component must now be positive.
+- **Dockerfile comment named a non-existent volume** — Header referenced
+  `gupax-share`; the volume is `gupax-data`.
+- **Hadolint failures on the Dependabot bump** — `hadolint-action` 3.5.0
+  flags `DL3064` (the `VNC_AUTH_TOKEN` ENV) and `DL3025` (shell-form
+  `HEALTHCHECK` CMD). Acknowledged with a scoped ignore and by switching the
+  healthcheck to exec form, so PR #69's lint job passes.
+
+### Security
+
+- **Actions are now pinned by commit SHA** (#68 / L7) — All nine actions in
+  the three workflows are SHA-pinned with the version kept in a trailing
+  comment, so a compromised tag cannot silently change what CI runs.
+- **CI failures are no longer silent** (#68 / M3) — Both registry workflows
+  now comment on issue #68 on failure, so a frozen registry surfaces without
+  anyone watching the Actions tab.
+
+### Documentation
+
+- **Repository casing fixed** (#68 / L1) — Badges and clone instructions
+  referenced `Gupax-docker`; the repository is `gupax-docker`.
+- **Internal planning notes removed from the public repo** (#68 / L2) — The
+  committed `.hermes/plans/` files contained pre-rename `VNC_PASSWORD`
+  references and internal VM addresses. Removed and added to `.gitignore`.
+- **CHANGELOG and TODO refreshed** (#68 / L3, L4) — Recorded the previously
+  undocumented work from May–July, and corrected the TODO's false claim that
+  `linux/arm64` multi-arch builds are complete (Gupax publishes no arm64
+  Linux binary; both workflows are amd64-only — tracked in #61).
+- **`eval $(dbus-launch)` annotated** — Intentional word splitting now carries
+  an explicit `# shellcheck disable=SC2046` directive.
+
+---
+
 ## [v2.0.1-20260518] — 2026-05-18
 
 ### Changed

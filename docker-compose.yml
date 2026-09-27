@@ -14,8 +14,7 @@ services:
       # - VNC_AUTH_TOKEN=change-me  # Uncomment to require VNC password
       # - MONERO_RPC_RESTRICTED=true  # Restrict RPC to view-only (default: true)
     volumes:
-      - gupax-data:/home/miner/.local/share/gupax       # Config + runtime data
-      - gupax-state:/home/miner/.local/state/gupax      # Gupax XDG state (session cache)
+      - gupax-data:/home/miner/.local/share/gupax       # Gupax config + state + runtime binaries
       - ${MONERO_DATA_PATH:-gupax-monero}:/home/miner/.bitmonero  # Blockchain
       - gupax-tor:/home/miner/.tor                       # Persistent .onion address
     ports:
@@ -65,6 +64,5 @@ services:
 
 volumes:
   gupax-data:
-  gupax-state:
   gupax-monero:
   gupax-tor:
