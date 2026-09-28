@@ -88,6 +88,14 @@ See the [Ports table](#ports) in Configuration for all Tor-related ports (`18081
 | `<onion>:18081` | Wallet RPC — connect wallets over Tor (restricted, read-only) |
 | `<onion>:18084` | P2P inbound — other Tor peers relay transactions here |
 
+> **Note on `--tx-proxy` syntax:** the argument has two separate fields —
+> `<zone>,[scheme://]host:port`. The zone must be `tor` (or `i2p`/`public`);
+> monerod rejects anything else and exits with `Invalid network for --tx-proxy`.
+> So `--tx-proxy=tor,127.0.0.1:9050` is correct, and `socks5,127.0.0.1:9050`
+> will **not** start. An optional `socks5://` scheme belongs on the address
+> (`tor,socks5://127.0.0.1:9050`); it is unnecessary here, since Tor's SocksPort
+> accepts the SOCKS4a CONNECT that the plain form produces.
+
 The container uses **tx-only mode** — P2P blockchain sync stays on clearnet; only wallet-originated transactions are routed through Tor. This keeps bandwidth through Tor negligible (~2 KB per transaction) while still protecting transaction privacy.
 
 ### Why not sync blocks over Tor?
@@ -191,7 +199,7 @@ Once monerod is running, you can connect any Monero wallet through the same `.on
 monero-wallet-cli --daemon-address <onion>:18081 --proxy 127.0.0.1:9050
 ```
 
-> **How it works:** The hidden service maps `:18081` directly to monerod's JSON-RPC at `127.0.0.1:18081`. Wallet sync (`get_blocks.bin`) and transaction submission (`send_raw_transaction`) both flow through this port. Transaction broadcast from monerod to the network uses `--tx-proxy=tor,...` to route through SOCKS5.
+> **How it works:** The hidden service maps `:18081` directly to monerod's JSON-RPC at `127.0.0.1:18081`. Wallet sync (`get_blocks.bin`) and transaction submission (`send_raw_transaction`) both flow through this port. Transaction broadcast from monerod to the network uses `--tx-proxy=tor,127.0.0.1:9050` — the `tor` is the network zone, and the no-scheme address makes monerod use a SOCKS4a CONNECT to Tor's SocksPort, which supports it.
 
 ---
 ## 🖥️ Unraid Setup
