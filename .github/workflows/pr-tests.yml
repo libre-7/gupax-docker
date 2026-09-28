@@ -128,10 +128,14 @@ jobs:
           sleep 5
           HEALTH=$(docker inspect gupax-test --format='{{.State.Health.Status}}' 2>/dev/null || echo "no-healthcheck")
           echo "Container health: $HEALTH"
+          # By this point Gupax is confirmed running and Tor is verified, so the
+          # container must be fully healthy. Accepting "starting" here would let a
+          # container stuck mid-start (the exact symptom the M1 healthcheck fix
+          # addresses) pass the gate.
           case "$HEALTH" in
-            healthy|starting|no-healthcheck) ;;
-            unhealthy)
-              echo "FAIL: Container is unhealthy"
+            healthy) ;;
+            *)
+              echo "FAIL: Container is $HEALTH (expected healthy)"
               docker logs gupax-test
               exit 1
               ;;
