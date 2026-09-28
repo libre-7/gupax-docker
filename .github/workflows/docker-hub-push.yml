@@ -14,16 +14,17 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
+      issues: write  # failure alert comments on tracking issue #68
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v4
+        uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4
 
       - name: Login to Docker Hub
-        uses: docker/login-action@v4
+        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4
         with:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
@@ -38,11 +39,16 @@ jobs:
       - name: Detect Gupax version from upstream
         id: version
         run: |
-          VERSION=$(curl -fsSL https://api.github.com/repos/gupax-io/gupax/releases/latest)
-          VERSION=$(echo "$VERSION" | python3 -c "import json,sys; print(json.load(sys.stdin)['tag_name'])")
+          bash .github/scripts/detect-gupax-version.sh
+          # detect-gupax-version.sh writes release.env (VERSION + GUPAX_ASSET)
+          # shellcheck disable=SC1091
+          . ./release.env
+          echo "VERSION=$VERSION" >> $GITHUB_ENV
+          echo "GUPAX_ASSET=$GUPAX_ASSET" >> $GITHUB_ENV
+          rm -f release.env
+
           VERSION_STRIPPED="${VERSION#v}"
           echo "Latest Gupax version: $VERSION (tag: $VERSION_STRIPPED)"
-          echo "version=$VERSION" >> $GITHUB_OUTPUT
           # Branch-aware tagging. Slashes -> hyphens (invalid in Docker tags).
           SAFE_REF=$(echo "${{ github.ref_name }}" | tr '/' '-')
           # Tag strategy:
@@ -55,14 +61,13 @@ jobs:
             TAGS="${{ env.IMAGE_NAME }}:${SAFE_REF}"$'\n'"${{ env.IMAGE_NAME }}:${SAFE_REF}-${{ github.sha }}"
           fi
           echo "Tags: $TAGS"
-          echo "VERSION=$VERSION" >> $GITHUB_ENV
-          echo "BUILD_DATE=$BUILD_DATE" >> $GITHUB_ENV
           echo "TAGS<<EOF"$'\n'"$TAGS"$'\n'"EOF" >> $GITHUB_ENV
 
       - name: Build and push to Docker Hub
-        uses: docker/build-push-action@v7
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7
         env:
           GUPAX_VERSION: ${{ env.VERSION }}
+          GUPAX_ASSET: ${{ env.GUPAX_ASSET }}
           BUILD_DATE: ${{ env.BUILD_DATE }}
         with:
           context: .
@@ -72,8 +77,22 @@ jobs:
           tags: ${{ env.TAGS }}
           build-args: |
             GUPAX_VERSION
+            GUPAX_ASSET
             BUILD_DATE
           cache-from: type=gha
           cache-to: type=gha,mode=max
           provenance: mode=max
           sbom: true
+
+      - name: Alert on failure
+        if: failure()
+        uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8
+        with:
+          script: |
+            const runUrl = `${process.env.GITHUB_SERVER_URL}/${process.env.GITHUB_REPOSITORY}/actions/runs/${process.env.GITHUB_RUN_ID}`;
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: 68,
+              body: `:rotating_light: **Docker Hub build failed** — registries are not being updated.\n\nWorkflow run: ${runUrl}\nBranch/commit: \`${context.ref}\` @ \`${context.sha}\`\n\`:latest\` on Docker Hub remains stale until this is fixed.\n\n_This is an automated alert (failure handler added in the #68 remediation batch)._`
+            });

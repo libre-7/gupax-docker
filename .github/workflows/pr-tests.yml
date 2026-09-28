@@ -11,23 +11,23 @@ jobs:
     name: Lint (Shell + Dockerfile + YAML)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 
       - name: ShellCheck (start.sh)
-        uses: ludeeus/action-shellcheck@2.0.0
+        uses: ludeeus/action-shellcheck@00cae500b08a931fb5698e11e79bfbd38e612a38 # 2.0.0
         with:
           scandir: '.'
           severity: error
           additional_files: 'start.sh'
 
       - name: Hadolint (Dockerfile)
-        uses: hadolint/hadolint-action@v3.3.0
+        uses: hadolint/hadolint-action@06be81baf89a55ffd0e24b8f04a4185738dd3387 # v3.5.0
         with:
           dockerfile: Dockerfile
           failure-threshold: warning
 
       - name: YAML lint (workflows + compose)
-        uses: ibiqlik/action-yamllint@v3
+        uses: ibiqlik/action-yamllint@2576378a8e339169678f9939646ee3ee325e845c # v3
         with:
           file_or_dir: |
             .github/workflows/
@@ -41,13 +41,13 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v4
+        uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4
 
       - name: Build image (no push)
-        uses: docker/build-push-action@v7
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7
         with:
           context: .
           load: true
@@ -136,6 +136,28 @@ jobs:
               exit 1
               ;;
           esac
+
+      - name: Health check detects dead VNC stack (M1 regression test)
+        # Final test — the container is sacrificed by design.
+        # M1: healthcheck.sh previously probed only websockify's static file
+        # server, which keeps serving index.html even after x11vnc dies.
+        # It now probes the VNC port (5900) and the x11vnc/Gupax processes.
+        # Kill x11vnc and confirm the container transitions to unhealthy.
+        run: |
+          docker exec gupax-test pkill -x x11vnc
+          # HEALTHCHECK: interval 30s, retries 3 → worst case ~90s to flip
+          # to unhealthy. Poll for up to 120s.
+          for i in $(seq 1 24); do
+            HEALTH=$(docker inspect gupax-test --format='{{.State.Health.Status}}')
+            if [ "$HEALTH" = "unhealthy" ]; then
+              echo "PASS: dead VNC detected after ${i} probes (M1 fix works)"
+              exit 0
+            fi
+            sleep 5
+          done
+          echo "FAIL: dead VNC NOT detected within 120s — healthcheck regression"
+          docker exec gupax-test /usr/local/bin/healthcheck.sh || true
+          exit 1
 
       - name: Dump logs on failure
         if: failure()

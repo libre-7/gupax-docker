@@ -112,8 +112,10 @@ fi
 # Display number for Xvfb
 DISPLAY_NUM=:1
 SCREEN_RESOLUTION=${SCREEN_RESOLUTION:-1920x1080x24}
-# Validate format: must be WxHxD with positive integers
-if ! echo "$SCREEN_RESOLUTION" | grep -qE '^[0-9]+x[0-9]+x[0-9]+$'; then
+# Validate format: must be WxHxD with strictly positive integers.
+# Each component is matched as [1-9][0-9]* so degenerate values (0x0x0,
+# 0x1080x24) are rejected — Xvfb would fail obscurely on a zero dimension.
+if ! echo "$SCREEN_RESOLUTION" | grep -qE '^[1-9][0-9]*x[1-9][0-9]*x[1-9][0-9]*$'; then
     echo "[!] Invalid SCREEN_RESOLUTION '$SCREEN_RESOLUTION' — using default 1920x1080x24"
     SCREEN_RESOLUTION="1920x1080x24"
 fi
@@ -332,6 +334,9 @@ echo ""
 
 # Start D-Bus session for file dialog support (zenity, xdg-desktop-portal, etc.)
 echo "[*] Starting D-Bus session..."
+# Word splitting is intentional: dbus-launch --sh-syntax emits shell
+# assignments (DBUS_SESSION_BUS_ADDRESS/PID) that must be eval'd.
+# shellcheck disable=SC2046
 eval $(dbus-launch --sh-syntax)
 export DBUS_SESSION_BUS_ADDRESS
 echo "[+] D-Bus session started"
@@ -387,8 +392,13 @@ echo "[+] Gupax started (PID $GUPAX_PID)"
 # Wait specifically for Gupax — other services dying should NOT kill the container.
 echo "[*] All services running. Press Ctrl+C to stop."
 echo ""
+# Guard the wait: under `set -e`, a non-zero Gupax exit (a crash — exactly when
+# cleanup is needed) would abort the script here, skipping cleanup() and losing
+# the exit code. Temporarily disable -e so we always reach teardown below.
+set +e
 wait $GUPAX_PID
 EXIT_CODE=$?
+set -e
 
 echo ""
 echo "[*] Gupax exited (code: $EXIT_CODE)"

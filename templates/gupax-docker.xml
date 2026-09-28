@@ -15,7 +15,7 @@
 
     Access the GUI at http://your-unraid-ip:6080 — just open in your browser, no X11 needed.
 
-    Set your Monero wallet address inside the Gupax GUI itself (Node tab). Mining cryptocurrency consumes significant electricity and may not be profitable.
+    Set your Monero wallet address inside the Gupax GUI itself (P2Pool tab, "Monero Address" field). Mining cryptocurrency consumes significant electricity and may not be profitable.
 
     Features:
     • Browser-based GUI via noVNC (port 6080)
@@ -30,7 +30,7 @@
   <Screenshot>https://raw.githubusercontent.com/libre-7/gupax-docker/main/icons/screenshot.jpg</Screenshot>
   <ExtraSearchTerms>monero xmr p2pool xmrig mining cryptocurrency noVNC</ExtraSearchTerms>
   <ReadMe>https://raw.githubusercontent.com/libre-7/gupax-docker/main/README.md</ReadMe>
-  <ExtraParams></ExtraParams>
+  <ExtraParams>--cap-drop=ALL --cap-add=SETUID --cap-add=SETGID --cap-add=DAC_OVERRIDE --cap-add=FOWNER --cap-add=CHOWN</ExtraParams>
   <PostArgs></PostArgs>
 
   <Config Name="TOR_ENABLED" Target="TOR_ENABLED" Type="Variable" Default="false" Description="Enable Tor hidden service for Monero transaction broadcast (tx-only mode, P2P sync stays on clearnet)" Mode="" Display="always" Required="false" Mask="false"/>
@@ -47,8 +47,7 @@
   <Config Name="Monero P2P" Target="18080" Type="Port" Default="18080" Description="Monero P2P Network" Mode="tcp" Display="advanced" Required="false" Mask="false"/>
   <Config Name="Monero RPC" Target="18081" Type="Port" Default="18081" Description="Monero RPC" Mode="tcp" Display="advanced" Required="false" Mask="false"/>
 
-  <Config Name="Gupax config" Target="/home/miner/.local/state/gupax" Type="Path" Default="/mnt/user/appdata/gupax/config" Mode="rw" Description="Gupax configuration and state (wallet, settings persist here)" Display="always" Required="false" Mask="false"/>
-  <Config Name="Gupax share" Target="/home/miner/.local/share/gupax" Type="Path" Default="/mnt/user/appdata/gupax/share" Mode="rw" Description="Downloaded mining binaries (P2Pool, XMRig, monerod) — persist across container updates" Display="always" Required="false" Mask="false"/>
+  <Config Name="Gupax config" Target="/home/miner/.local/share/gupax" Type="Path" Default="/mnt/user/appdata/gupax/share" Mode="rw" Description="Gupax configuration, wallet, settings AND downloaded mining binaries (P2Pool, XMRig, monerod) — Gupax stores everything here" Display="always" Required="false" Mask="false"/>
   <Config Name="Monero blockchain" Target="/home/miner/.bitmonero" Type="Path" Default="/mnt/user/appdata/gupax/monero" Mode="rw" Description="Monero blockchain data. In Gupax UI, go to Node tab and set database path to /home/miner/.bitmonero" Display="always" Required="false" Mask="false"/>
   <Config Name="Tor keys" Target="/home/miner/.tor" Type="Path" Default="/mnt/user/appdata/gupax/tor" Mode="rw" Description="Tor hidden service keys (keeps the same .onion address across container restarts)" Display="always" Required="false" Mask="false"/>
 
@@ -78,6 +77,14 @@
 - P2Pool + XMRig via Gupax v2.0.1 GUI.
 ### 2026.05.23
 - Fixed template format for Unraid v2 schema (Config elements with Type attribute).
+### 2026.09.27
+- Capability hardening: template now applies the same cap_drop/cap_add set as docker-compose.yml.
+- Volume fix: Gupax stores config, wallet, settings and downloaded binaries in
+  /home/miner/.local/share/gupax — the old "Gupax config" mapping to
+  /home/miner/.local/state/gupax was never written to and has been merged into
+  the single "Gupax config" (share) path. If you previously backed up the
+  appdata/gupax/config directory, your real config is in appdata/gupax/share.
+- Wallet address is set in the P2Pool tab ("Monero Address"), not the Node tab.
   </Changes>
 
 </Container>

@@ -4,7 +4,7 @@
 
 - [x] **Working Dockerfile** — Gupax binary with Xvfb + x11vnc + noVNC
 - [x] **noVNC web access** — Container accessible via browser at http://localhost:6080
-- [x] **Wallet address configuration** — Set inside Gupax GUI (Node tab), not as Docker env var
+- [x] **Wallet address configuration** — Set inside Gupax GUI (P2Pool tab), not as Docker env var
 - [x] **docker-compose.yml** — Working compose with Gupax, noVNC, and volumes
 - [x] **README.md** — Clear documentation with Quick Start and troubleshooting
 
@@ -13,7 +13,7 @@
 - [x] **Blockchain volume** — Mount existing Monero blockchain at `/home/miner/.bitmonero`
 - [x] **PR test pipeline** — Lint (shellcheck + hadolint + yamllint) + smoke test on PRs
 - [x] **GHCR + Docker Hub CI** — Image builds pushed to both registries on merge to main
-- [x] **Multi-arch builds** — Support `linux/arm64` if Gupax provides arm64 binary
+- [ ] **Multi-arch builds** — `linux/arm64` not yet supported: Gupax ships no arm64 Linux binary. Both workflows build `linux/amd64` only (tracked in #61)
 - [x] **CONTRIBUTING.md** — How to submit PRs and report issues
 - [ ] **X11 troubleshooting docs** — Expand troubleshooting for common noVNC issues
 - [ ] **GitHub Releases** — Tagged releases with release notes

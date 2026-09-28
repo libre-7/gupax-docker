@@ -1,8 +1,8 @@
 <img src="https://raw.githubusercontent.com/gupax-io/gupax/main/assets/images/banner.png" width="600">
 
-[![Build Status](https://img.shields.io/github/actions/workflow/status/libre-7/Gupax-docker/docker-publish.yml?branch=main&style=flat-square&logo=github&label=build)](https://github.com/libre-7/Gupax-docker/actions)
-[![Docker Hub Build](https://img.shields.io/github/actions/workflow/status/libre-7/Gupax-docker/docker-hub-push.yml?branch=main&style=flat-square&logo=docker&label=dockerhub)](https://github.com/libre-7/Gupax-docker/actions/workflows/docker-hub-push.yml)
-[![License](https://img.shields.io/github/license/libre-7/Gupax-docker?style=flat-square&color=blue)](https://github.com/libre-7/Gupax-docker/blob/main/LICENSE)
+[![Build Status](https://img.shields.io/github/actions/workflow/status/libre-7/gupax-docker/docker-publish.yml?branch=main&style=flat-square&logo=github&label=build)](https://github.com/libre-7/gupax-docker/actions)
+[![Docker Hub Build](https://img.shields.io/github/actions/workflow/status/libre-7/gupax-docker/docker-hub-push.yml?branch=main&style=flat-square&logo=docker&label=dockerhub)](https://github.com/libre-7/gupax-docker/actions/workflows/docker-hub-push.yml)
+[![License](https://img.shields.io/github/license/libre-7/gupax-docker?style=flat-square&color=blue)](https://github.com/libre-7/gupax-docker/blob/main/LICENSE)
 [![Docker Hub](https://img.shields.io/docker/pulls/libre7/gupax-docker?style=flat-square&color=blue&logo=docker)](https://hub.docker.com/r/libre7/gupax-docker)
 [![Image Size](https://img.shields.io/docker/image-size/libre7/gupax-docker/latest?style=flat-square&logo=docker&color=blueviolet)](https://hub.docker.com/r/libre7/gupax-docker)
 
@@ -42,8 +42,8 @@
 
 ```bash
 # 1. Clone the repository
-git clone https://github.com/libre-7/Gupax-docker.git
-cd Gupax-docker
+git clone https://github.com/libre-7/gupax-docker.git
+cd gupax-docker
 
 # 2. Copy and edit environment file
 cp .env.example .env
@@ -65,7 +65,6 @@ docker run -d \
   -p 18080:18080 \
   -p 18081:18081 \
   -v gupax-data:/home/miner/.local/share/gupax \
-  -v gupax-state:/home/miner/.local/state/gupax \
   -v gupax-monero:/home/miner/.bitmonero \
   libre7/gupax-docker:latest
 
@@ -243,11 +242,11 @@ Once the container is running:
 
 Inside the Gupax GUI:
 
-1. If you do not see a **Node** tab, go to **Settings** → **Tabs** and check **Node** → **Save**
-2. Go to the **Node** tab and enter your Monero wallet address in the **Wallet Address** field
+1. Go to the **P2Pool** tab
+2. Enter your Monero wallet address in the **Monero Address** field (shows `[00/95]` until a full 95-character address is entered)
 3. Save the settings
 
-> **Note:** Gupax v2.0.0+ hides the Node tab by default. You must enable it manually. The wallet address is set inside the Gupax GUI itself — it is **not** a Docker environment variable or template field.
+> **Note:** The wallet address is a **P2Pool** field — it tells P2Pool where to send your mining payouts. The **Node** tab (hidden by default in Gupax v2.0.0+; enable via **Settings** → **Tabs** → **Node**) configures the Monero daemon and has no wallet field. The address is set inside the Gupax GUI itself — it is **not** a Docker environment variable or template field.
 
 ### Ports on Unraid
 
@@ -301,8 +300,7 @@ If you have an existing Monero blockchain on your Unraid server:
 
 | Volume | Path | Description |
 |---|---|---|
-| `gupax-data` | `/home/miner/.local/share/gupax` | Downloaded Gupax binaries (P2Pool, XMRig, monerod) |
-| `gupax-state` | `/home/miner/.local/state/gupax` | Gupax configuration and session state |
+| `gupax-data` | `/home/miner/.local/share/gupax` | Gupax configuration, wallet and settings, plus the downloaded binaries (P2Pool, XMRig, monerod) it fetches at runtime |
 | `gupax-monero` (or host path) | `/home/miner/.bitmonero` | Monero blockchain data |
 | `gupax-tor` | `/home/miner/.tor` | Persistent `.onion` address and Tor data |
 

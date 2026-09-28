@@ -5,7 +5,7 @@
 #
 # Standalone approach — only Gupax GUI is bundled.
 # P2Pool, XMRig, monerod, and xmrig-proxy are downloaded at runtime by Gupax
-# and persisted in /home/miner/.local/share/gupax via the gupax-share volume.
+# and persisted in /home/miner/.local/share/gupax via the gupax-data volume.
 # =============================================================================
 
 FROM ubuntu:22.04@sha256:4fff072216d2d3d6accc8bc09b57c33e474edd726f3f65fbadbb05647ab15fa5
@@ -22,7 +22,11 @@ ENV TZ=UTC
 # Xvfb display for headless GUI
 ENV DISPLAY=:1
 
-# VNC password — set VNC_AUTH_TOKEN to require auth; leave empty for no auth
+# VNC password — set VNC_AUTH_TOKEN to require auth; leave empty for no auth.
+# The value is a credential supplied at runtime, not a build-time secret; the
+# hadolint DL3064 warning is acknowledged below rather than worked around
+# because ENV is the only mechanism to declare it for docker run/compose users.
+# hadolint ignore=DL3064
 ENV VNC_AUTH_TOKEN=
 
 # Install base tools needed for adding the Tor Project apt repo
@@ -94,12 +98,19 @@ WORKDIR /tmp/install
 
 # Build argument: Gupax version to install (default: v2.0.1).
 # Override at build time: --build-arg GUPAX_VERSION=v2.0.2
+# GUPAX_ASSET is the actual Linux x64 tarball filename from the chosen
+# release (resolved by CI from the release's assets[] — see
+# .github/scripts/detect-gupax-version.sh). Upstream has published
+# releases whose tag differs from the asset name (e.g. tag
+# "critical_update_p2pool" shipping gupax-v2.0.1-linux-x64.tar.gz), so
+# the filename must never be constructed from the tag alone.
 # For reproducibility, the SHA256 is fetched from upstream SHA256SUMS
 # at build time — the image build fails if verification fails.
 ARG GUPAX_VERSION=v2.0.1
+ARG GUPAX_ASSET=gupax-v2.0.1-linux-x64.tar.gz
 ARG BUILD_DATE=unknown
-RUN TARBALL="gupax-${GUPAX_VERSION}-linux-x64.tar.gz" \
-    && echo "[*] Downloading Gupax ${GUPAX_VERSION}..." \
+RUN TARBALL="${GUPAX_ASSET}" \
+    && echo "[*] Downloading Gupax ${GUPAX_VERSION} (${TARBALL})..." \
     && curl -fsSL "https://github.com/gupax-io/gupax/releases/download/${GUPAX_VERSION}/${TARBALL}" -o "${TARBALL}" \
     && curl -fsSL "https://github.com/gupax-io/gupax/releases/download/${GUPAX_VERSION}/SHA256SUMS" -o SHA256SUMS \
     && grep "${TARBALL}" SHA256SUMS | awk '{print $1 "  " $2}' > "${TARBALL}.sha256" \
@@ -146,8 +157,9 @@ RUN mkdir -p /home/miner/.bitmonero && chown miner:miner /home/miner/.bitmonero
 # start.sh drops to the miner user via gosu before launching Gupax.
 WORKDIR /home/miner
 
-# Health check — verifies noVNC web interface + Tor (if enabled)
+# Health check — verifies noVNC + VNC + Gupax, plus Tor if enabled.
+# Exec form (JSON array) avoids hadolint DL3025.
 HEALTHCHECK --interval=30s --timeout=5s --start-period=60s --retries=3 \
-  CMD /usr/local/bin/healthcheck.sh
+  CMD ["/usr/local/bin/healthcheck.sh"]
 
 ENTRYPOINT ["/usr/local/bin/start.sh"]

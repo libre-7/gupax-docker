@@ -63,14 +63,13 @@ The container runs a **noVNC web interface** — no X11 or VNC client needed:
 
 ## Volumes
 
-The template creates four persistent directories under `/mnt/user/appdata/gupax/`.
+The template creates three persistent directories under `/mnt/user/appdata/gupax/`.
 
 Unraid uses host directory paths; `docker compose` uses named volumes.
 The data is the same — only the storage mechanism differs.
 
 | Unraid directory | Container path | Compose named volume |
 |------------------|----------------|---------------------|
-| `config/` | `/home/miner/.local/state/gupax` | `gupax-state` |
 | `share/` | `/home/miner/.local/share/gupax` | `gupax-data` |
 | `monero/` | `/home/miner/.bitmonero` | `gupax-monero` |
 | `tor/` | `/home/miner/.tor` | `gupax-tor` |
