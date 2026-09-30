@@ -17,6 +17,7 @@
 - [x] **CONTRIBUTING.md** — How to submit PRs and report issues
 - [ ] **X11 troubleshooting docs** — Expand troubleshooting for common noVNC issues
 - [ ] **GitHub Releases** — Tagged releases with release notes
+- [ ] **Tor keyring refresh** — The Tor apt keyring is version-pinned in the Dockerfile (`…-keyring_2025.08.08_all.deb`). Dependabot's `docker` ecosystem does not cover it, so it must be bumped by hand before the Tor Project rotates that key — otherwise every build fails at the keyring download.
 
 ## 🟢 Nice to Have — Polish & Production Hardening
 
