@@ -44,7 +44,7 @@
 
 ## 📌 Current Build Information
 
-- **Version scheme:** `v{upstream-gupax}-{build-date}` (e.g. `v2.0.1-20260518`)
+- **Version scheme:** `v{upstream-gupax}-{build-date}` (e.g. `v2.0.1-20260928` — the date is the build day, not a fixed value)
 - **Gupax version:** Dynamically detected at build time — CI resolves latest upstream release
 - **Build method:** Pre-built Gupax binary from upstream, verified via SHA256SUMS
 - **Image size:** ~375 MB

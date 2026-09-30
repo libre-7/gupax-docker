@@ -21,8 +21,8 @@ cleanup() {
     kill $PORTAL_PID 2>/dev/null || true
     wait $PORTAL_PID 2>/dev/null || true
     echo "[*] Stopping D-Bus session..."
-    kill $DBUS_SESSION_BUS_PID 2>/dev/null || true
-    wait $DBUS_SESSION_BUS_PID 2>/dev/null || true
+    kill "$DBUS_SESSION_BUS_PID" 2>/dev/null || true
+    wait "$DBUS_SESSION_BUS_PID" 2>/dev/null || true
     echo "[*] Stopping websockify..."
     kill $WEBSOCKIFY_PID 2>/dev/null || true
     wait $WEBSOCKIFY_PID 2>/dev/null || true
@@ -169,7 +169,7 @@ TORRC
             echo "[+] Tor SOCKS proxy is ready (127.0.0.1:9050)"
             break
         fi
-        if [ $i -eq 30 ]; then
+        if [ "$i" -eq 30 ]; then
             echo "[!] WARNING: Tor SOCKS proxy did not become ready within 30s — continuing anyway"
         else
             sleep 1
@@ -186,7 +186,7 @@ TORRC
                 break
             fi
         fi
-        if [ $i -eq 30 ]; then
+        if [ "$i" -eq 30 ]; then
             echo "[!] WARNING: Hidden service .onion address not generated in time"
         else
             sleep 1
@@ -230,11 +230,13 @@ TORRC
         echo "    --anonymous-inbound=${HS_KEY}:18084,127.0.0.1:18086,40"
         # Persist for reference across container restarts
         echo "Monero .onion: ${HS_HOSTNAME}" > /home/miner/.tor/monerod_onion.txt
-        echo "" >> /home/miner/.tor/monerod_onion.txt
-        echo "Wallet RPC — connect wallets via Tor:" >> /home/miner/.tor/monerod_onion.txt
-        echo "  ${HS_HOSTNAME}:18081" >> /home/miner/.tor/monerod_onion.txt
-        echo "" >> /home/miner/.tor/monerod_onion.txt
-        echo "Monerod arguments (Gupax → Node → Arguments):" >> /home/miner/.tor/monerod_onion.txt
+        {
+            echo ""
+            echo "Wallet RPC — connect wallets via Tor:"
+            echo "  ${HS_HOSTNAME}:18081"
+            echo ""
+            echo "Monerod arguments (Gupax → Node → Arguments):"
+        } >> /home/miner/.tor/monerod_onion.txt
         if [ "${MONERO_RPC_RESTRICTED:-true}" = "true" ]; then
             echo "  --restricted-rpc" >> /home/miner/.tor/monerod_onion.txt
         fi
@@ -255,12 +257,12 @@ rm -f /tmp/.X${DISPLAY_NUM#*:}-lock /tmp/.X11-unix/X${DISPLAY_NUM#*:} 2>/dev/nul
 
 # Kill any stale Xvfb process still holding the display
 for pid in $(pgrep -x Xvfb 2>/dev/null); do
-    kill -9 $pid 2>/dev/null && echo "[*] Killed stale Xvfb (PID $pid)" || true
+    kill -9 "$pid" 2>/dev/null && echo "[*] Killed stale Xvfb (PID $pid)" || true
 done
 
 # Start Xvfb (virtual framebuffer)
 echo "[*] Starting Xvfb on $DISPLAY_NUM..."
-Xvfb $DISPLAY_NUM -screen 0 $SCREEN_RESOLUTION -nolisten tcp &
+Xvfb "$DISPLAY_NUM" -screen 0 "$SCREEN_RESOLUTION" -nolisten tcp &
 XVFB_PID=$!
 
 # Wait for Xvfb to start
