@@ -82,8 +82,13 @@ jobs:
       - name: Wait for Gupax process
         timeout-minutes: 2
         run: |
+          # `pgrep -f gupax` matched ANY process whose command line contains
+          # "gupax" — including the runtime-downloaded
+          # /home/miner/.local/share/gupax/xmrig/xmrig. If the Gupax GUI died
+          # but a downloaded daemon was running, this gate passed. Match the
+          # same specific pattern healthcheck.sh:38 uses. See #73 (L1).
           for i in $(seq 1 15); do
-            if docker exec gupax-test pgrep -f gupax 2>/dev/null; then
+            if docker exec gupax-test pgrep -f gupax/gupax 2>/dev/null; then
               echo "Gupax ready after ${i} attempts"
               break
             fi
@@ -98,13 +103,19 @@ jobs:
       - name: Verify Tor SOCKS proxy (9050)
         timeout-minutes: 2
         run: |
+          # Fatal, not a warning. Tor is the most complex code path in this
+          # project and a regression here previously passed CI green. 20
+          # attempts x 3s = 60s of budget, which the live run cleared on
+          # attempt 1. See #73 (M3).
           for i in $(seq 1 20); do
             if docker exec gupax-test bash -c 'echo > /dev/tcp/127.0.0.1/9050' 2>/dev/null; then
               echo "Tor SOCKS proxy ready (attempt ${i})"
               break
             fi
             if [ $i -eq 20 ]; then
-              echo "WARNING: Tor SOCKS proxy not ready — non-fatal for build"
+              echo "FAIL: Tor SOCKS proxy never came up on 127.0.0.1:9050"
+              docker logs gupax-test
+              exit 1
             fi
             sleep 3
           done
@@ -118,28 +129,42 @@ jobs:
               break
             fi
             if [ $i -eq 15 ]; then
-              echo "WARNING: Hidden service hostname not ready (may need more time)"
+              echo "FAIL: hidden service .onion hostname never generated"
+              docker logs gupax-test
+              exit 1
             fi
             sleep 2
           done
 
       - name: Container health check
+        timeout-minutes: 3
         run: |
-          sleep 5
-          HEALTH=$(docker inspect gupax-test --format='{{.State.Health.Status}}' 2>/dev/null || echo "no-healthcheck")
-          echo "Container health: $HEALTH"
-          # By this point Gupax is confirmed running and Tor is verified, so the
-          # container must be fully healthy. Accepting "starting" here would let a
-          # container stuck mid-start (the exact symptom the M1 healthcheck fix
-          # addresses) pass the gate.
-          case "$HEALTH" in
-            healthy) ;;
-            *)
-              echo "FAIL: Container is $HEALTH (expected healthy)"
-              docker logs gupax-test
-              exit 1
-              ;;
-          esac
+          # Poll instead of a single read. HEALTHCHECK runs on interval=30s
+          # with start-period=60s, so a fixed `sleep 5` is a race: the
+          # previous gate read `healthy` at T+15.5s on a fast runner but
+          # would see `starting` on a slow one and fail a working build.
+          # #72 correctly tightened the accepted value from
+          # `healthy|starting|no-healthcheck` to `healthy` only; this adds the
+          # bounded wait that makes that strictness safe. See #73 (L2).
+          for i in $(seq 1 24); do
+            HEALTH=$(docker inspect gupax-test --format='{{.State.Health.Status}}' 2>/dev/null || echo "no-healthcheck")
+            echo "Container health: $HEALTH (attempt ${i})"
+            case "$HEALTH" in
+              healthy)
+                echo "PASS: container reached healthy"
+                exit 0
+                ;;
+              unhealthy)
+                echo "FAIL: container reported unhealthy"
+                docker logs gupax-test
+                exit 1
+                ;;
+            esac
+            sleep 5
+          done
+          echo "FAIL: container still '$HEALTH' after 120s (expected healthy)"
+          docker logs gupax-test
+          exit 1
 
       - name: Health check detects dead VNC stack (M1 regression test)
         # Final test — the container is sacrificed by design.
