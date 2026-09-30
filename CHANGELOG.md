@@ -10,6 +10,82 @@ builds. `v2.0.1` and `v2.0.1-YYYYMMDD` tags are Docker image tags — the
 `v`-prefixed tag is a moving tag that always points to the latest build of that
 upstream release.
 
+## [Unreleased] — 2026-09-29
+
+Follow-up review ([#73](https://github.com/libre-7/gupax-docker/issues/73)) of the
+2026-09-27 remediation. The #68 findings were re-verified against code, both
+registries and a live CI run; this entry covers the new findings and the two
+small regressions in the previous batch's own PRs.
+
+### Fixed
+
+- **Documented install path ran the mining stack as root** (#73 / H1) — The
+  image deliberately does not pre-create `/home/miner/.local/share/gupax`, so
+  Docker mounts the `gupax-data` named volume `root:root 0755`.
+  `start.sh`'s `PUID` detection used `stat … || echo 999`, and that fallback
+  only fires when the path is *missing* — so a fresh volume returned `0` and
+  `gosu 0:0` ran Gupax, monerod, P2Pool and XMRig as **UID 0**. This hit
+  `docker compose up` (the README Quick Start) and the `docker run -v` example.
+  The PR smoke test mounted no volume at all, so it took the fallback branch
+  and ran as `miner`/999 — the one configuration no user has. `start.sh` now
+  treats a detected owner of `0` as unset, compose pins `PUID`/`PGID=999`,
+  and CI mounts a volume and asserts Gupax's effective UID is not 0.
+- **"RPC is restricted" was claimed even when it wasn't** (#73 / M1) — The Tor
+  banner line printed unconditionally, so `MONERO_RPC_RESTRICTED=false` still
+  told the operator their RPC was restricted while the recommended arguments
+  omitted `--restricted-rpc`. Port `18081` is mapped to the LAN by both compose
+  and the Unraid template. The claim is now gated and the docs state plainly
+  that the flag shapes a *recommendation* the operator pastes into Gupax, not
+  a control the container enforces.
+- **CI failure alerts pointed at a ticket that was about to close** (#73 / M2)
+  — Both registry workflows hardcoded `issue_number: 68`, the completed
+  remediation ticket. Once closed, the comment 404s and the alert is silently
+  lost — the exact failure mode the alert was added to prevent. Alerts now
+  target a dedicated long-lived CI-watch issue.
+- **Release detector's token auth never ran** (#73 / M4) — The script supports
+  `GITHUB_TOKEN` to avoid unauthenticated rate limits, but no workflow
+  exported it to the calling step, so every build called the GitHub API
+  anonymously from shared runner IPs. Both workflows now pass it.
+- **Docker Hub served pre-#68 README text** (#73 / M5) — Verified live: wrong
+  case `Gupax-docker` clone URLs and badges, and no `docker-hub-push` badge.
+  A CI step now syncs the README to `full_description` on every `main` push.
+- **Tor regressions could not fail CI** (#73 / M3) — The SOCKS-proxy and
+  hidden-service probes printed a warning and fell through. Both are fatal
+  now, with unchanged time budgets.
+- **Smoke test's process probe was too loose** (#73 / L1) — `pgrep -f gupax`
+  also matches the runtime-downloaded `…/gupax/xmrig/xmrig`, so a dead GUI
+  with a live daemon passed. Now matches `gupax/gupax`, as `healthcheck.sh`
+  already did.
+- **Health gate was a single non-polling read** (#73 / L2) — A fixed `sleep 5`
+  against a `interval=30s` / `start-period=60s` healthcheck. Now a bounded
+  120s poll that fails fast on an explicit `unhealthy`.
+- **README's Tor walkthrough instructed a clearnet DNS leak** (#73 / M6) — The
+  example start-options line included `--enable-dns-blocklist`, which resolves
+  seed DNS over clearnet rather than through Tor. Removed, with a warning.
+- **CI build remained untested for the volume path** — Folded into the H1 fix.
+
+### Documentation
+
+- `SECURITY.md` / `TODO.md` / `README.md`: the "runs as a non-root `miner`
+  user" claim was false on the compose path; replaced with the actual UID
+  matrix. `TODO.md` also notes that only the Gupax GUI is checksum-verified —
+  not the P2Pool / XMRig / monerod binaries Gupax fetches at runtime.
+- `.dockerignore`: the comment claimed to "exclude all markdown except
+  healthcheck.sh", which is not markdown; corrected and grouped (behaviour
+  unchanged). `docs/` matched nothing.
+- `README.md`: `GUPAX_VERSION` is the newest *semver-tagged* release, not
+  necessarily the newest release. `templates/README.md` no longer recommends
+  Docker Hub for Unraid when the template pulls from GHCR. `TODO.md`'s date
+  example is a real build date rather than a frozen `20260518`.
+
+### Earlier in this batch
+
+- `docs`: corrected the `--tx-proxy` zone/scheme description (#71).
+- `ci`: the PR smoke test now fails on a container stuck in `starting`
+  rather than accepting it (#72).
+
+---
+
 ## [Unreleased] — 2026-09-27
 
 Comprehensive remediation of issue #68. Registry builds have been broken
