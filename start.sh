@@ -74,8 +74,24 @@ echo "[*] Fixing data directory permissions..."
 
 # Detect the user to run Gupax as, matching the data volume owner.
 # Must happen early — chown below needs to target the correct UID/GID.
-PUID=${PUID:-$(stat -c '%u' /home/miner/.local/share/gupax 2>/dev/null || echo "999")}
-PGID=${PGID:-$(stat -c '%g' /home/miner/.local/share/gupax 2>/dev/null || echo "999")}
+#
+# A fresh Docker named volume mounts root:root 0755, because this image
+# deliberately does not pre-create the data path (see Dockerfile comment).
+# The `|| echo` fallback only fires when the path is MISSING, so with a fresh
+# volume stat succeeds and returns 0 — which would run the entire mining
+# stack as root via gosu 0:0. Treat a detected 0 as "unset" and fall back to
+# the image's miner user (useradd -r default) instead.
+_det_uid=$(stat -c '%u' /home/miner/.local/share/gupax 2>/dev/null || echo 999)
+_det_gid=$(stat -c '%g' /home/miner/.local/share/gupax 2>/dev/null || echo 999)
+if [ "$_det_uid" = "0" ]; then
+    echo "[!] Data volume is root-owned (fresh Docker volume) — defaulting PUID to 999"
+    _det_uid=999
+fi
+if [ "$_det_gid" = "0" ]; then
+    _det_gid=999
+fi
+PUID=${PUID:-$_det_uid}
+PGID=${PGID:-$_det_gid}
 
 # Pre-create Gupax binary subdirectories on the persistent volume and symlink
 # them into /usr/local/bin/gupax/ so Gupax downloads binaries to the volume,

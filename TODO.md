@@ -20,8 +20,8 @@
 
 ## 🟢 Nice to Have — Polish & Production Hardening
 
-- [x] **Non-root user** — Runs as `miner` user for security
-- [x] **Version pinning** — Gupax version pinned with SHA256 checksum verification
+- [x] **Non-root user** — Gupax runs as a non-root user via `gosu` (default UID 999; `PUID`/`PGID` override). CI asserts this on every PR.
+- [x] **Version pinning** — Gupax GUI version pinned with SHA256 checksum verification. ⚠️ The P2Pool/XMRig/monerod binaries Gupax downloads at **runtime** are not checksum-verified by this image.
 - [x] **Automatic restart** — `restart: unless-stopped` in compose
 - [x] **VNC password** — Optional password protection for noVNC interface
 - [ ] **Read-only root filesystem** — Mark image as `read_only: true` where possible
