@@ -58,7 +58,7 @@ posture of the container:
 |---------|--------|
 | `VNC_AUTH_TOKEN` | Required for VNC access on port 5900. Without it, anyone on your network can control the Gupax GUI. |
 | `TOR_ENABLED=true` | Routes transaction broadcasts through Tor for privacy. P2P sync stays on clearnet. |
-| `MONERO_RPC_RESTRICTED=true` | Restricts RPC to view-only commands. Set to `false` only if you understand the implications. |
+| `MONERO_RPC_RESTRICTED=true` | Adds `--restricted-rpc` to the **recommended** monerod arguments printed at startup. The container does not inject it — you still have to paste the arguments into Gupax → Node → Arguments and Save. With `false`, the startup banner warns that port 18081 is unauthenticated. |
 | `--rpc-login` | Do **not** use with Gupax-managed monerod — incompatible. Use `--restricted-rpc` instead. |
 
 The container runs with `cap_drop: [ALL]` and only adds back the minimum
