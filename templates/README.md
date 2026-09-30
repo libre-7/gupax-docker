@@ -2,9 +2,9 @@
 
 This directory contains the Docker template XML file for installing **Gupax-docker** on [Unraid](https://unraid.net/) via the [Community Applications](https://forums.unraid.net/topic/38582-plug-in-community-applications/) plugin.
 
-The Docker image is published to both:
-- **Docker Hub**: [libre7/gupax-docker](https://hub.docker.com/r/libre7/gupax-docker) (recommended for Unraid)
-- **GitHub Container Registry**: [ghcr.io/libre-7/gupax-docker](https://github.com/libre-7/gupax-docker/pkgs/container/gupax-docker)
+The image is published to both:
+- **GitHub Container Registry**: [ghcr.io/libre-7/gupax-docker](https://github.com/libre-7/gupax-docker/pkgs/container/gupax-docker) — this is what the template pulls (`<Repository>`)
+- **Docker Hub**: [libre7/gupax-docker](https://hub.docker.com/r/libre7/gupax-docker) — identical image, published in the same CI run
 
 ## How to Use
 
