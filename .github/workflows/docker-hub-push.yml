@@ -90,6 +90,24 @@ jobs:
           provenance: mode=max
           sbom: true
 
+      - name: Sync README to Docker Hub description
+        # Docker Hub's repository page and the GitHub README are separate
+        # artifacts with no automatic propagation. The #68 / L1 casing fix
+        # landed in the repo but the published page kept serving pre-fix
+        # text for over a month, and #68 / L5 was never actioned. Syncing on
+        # every main push makes drift self-healing instead of a manual,
+        # perpetually-overdue chore. See #73 (M5).
+        #
+        # `continue-on-error` on purpose: the image is already pushed at this
+        # point, and a description-sync failure must not turn a good build
+        # red. The step is idempotent and skips the PATCH when already in
+        # sync, so this is a no-op on the overwhelming majority of runs.
+        continue-on-error: true
+        env:
+          DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+          DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+        run: python3 .github/scripts/sync-docker-hub-description.py
+
       - name: Alert on failure
         if: failure()
         uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8
