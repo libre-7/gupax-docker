@@ -23,6 +23,14 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4
 
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@99012661954931238ded8c8b007157a8430204e1 # v4
+        # Mirrors docker-publish.yml. Both workflows are currently amd64-only
+        # (Gupax ships no arm64 Linux binary — #61), so this is a no-op today,
+        # but the asymmetry meant the Docker Hub build would break the moment
+        # arm64 is added to `platforms:` while the GHCR one worked. Registry
+        # parity is an explicit project invariant (#48/#53/#65). See #73 (L4).
+
       - name: Login to Docker Hub
         uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4
         with:

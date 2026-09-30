@@ -4,3 +4,14 @@ updates:
     directory: /
     schedule:
       interval: monthly
+
+  # Keeps the digest-pinned base image current. Without this the
+  # `ubuntu:22.04@sha256:...` pin in the Dockerfile is correct forever —
+  # including once it accumulates months of Ubuntu security fixes that never
+  # arrive. Dependabot proposes a PR with the new digest; the Dockerfile
+  # pin stays digest-based either way, so this is a bump PR, not a
+  # floating-tag regression. See #73 (L6).
+  - package-ecosystem: docker
+    directory: /
+    schedule:
+      interval: monthly

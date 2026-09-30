@@ -109,18 +109,24 @@ WORKDIR /tmp/install
 ARG GUPAX_VERSION=v2.0.1
 ARG GUPAX_ASSET=gupax-v2.0.1-linux-x64.tar.gz
 ARG BUILD_DATE=unknown
+# Extract with --strip-components=1 so the binary lands at
+# /usr/local/bin/gupax/gupax regardless of the tarball's root directory name.
+# The previous `mv gupax-${GUPAX_VERSION}-linux-x64/gupax` reconstructed that
+# name from the release TAG, which breaks whenever the two disagree — exactly
+# what happened upstream with the non-semver `critical_update_p2pool` tag (see
+# #68 / C1). The asset name is already resolved from the release's assets[];
+# the directory name should not be re-derived. See #73 (L3).
 RUN TARBALL="${GUPAX_ASSET}" \
     && echo "[*] Downloading Gupax ${GUPAX_VERSION} (${TARBALL})..." \
     && curl -fsSL "https://github.com/gupax-io/gupax/releases/download/${GUPAX_VERSION}/${TARBALL}" -o "${TARBALL}" \
     && curl -fsSL "https://github.com/gupax-io/gupax/releases/download/${GUPAX_VERSION}/SHA256SUMS" -o SHA256SUMS \
     && grep "${TARBALL}" SHA256SUMS | awk '{print $1 "  " $2}' > "${TARBALL}.sha256" \
     && sha256sum --check "${TARBALL}.sha256" \
-    && tar -xzf "${TARBALL}" \
     && mkdir -p /usr/local/bin/gupax \
-    && mv "gupax-${GUPAX_VERSION}-linux-x64/gupax" /usr/local/bin/gupax/gupax \
+    && tar -xzf "${TARBALL}" -C /usr/local/bin/gupax --strip-components=1 \
     && chmod +x /usr/local/bin/gupax/gupax \
     && ln -s /usr/local/bin/gupax/gupax /usr/local/bin/gupax-bin \
-    && rm -rf "${TARBALL}" "${TARBALL}.sha256" SHA256SUMS "gupax-${GUPAX_VERSION}-linux-x64" /tmp/install
+    && rm -rf "${TARBALL}" "${TARBALL}.sha256" SHA256SUMS /tmp/install
 
 # Labels
 LABEL org.opencontainers.image.title="gupax-docker" \
