@@ -63,7 +63,24 @@ posture of the container:
 
 The container runs with `cap_drop: [ALL]` and only adds back the minimum
 capabilities needed (`SETUID`, `SETGID`, `DAC_OVERRIDE`, `FOWNER`, `CHOWN`).
-It runs as a non-root `miner` user at runtime.
+
+### Runtime user
+
+Gupax is launched via `gosu` as a **non-root** user. Which UID depends on
+configuration, and the difference matters:
+
+| Configuration | Effective UID |
+|---|---|
+| Default (fresh volume, no `PUID` set) | `999` — the image's non-root `miner` user |
+| `PUID`/`PGID` set explicitly | that value (compose defaults to `999`; the Unraid template defaults to `99`) |
+| Pre-existing volume owned by another user | that volume owner's UID |
+
+The container **starts as root** so `start.sh` can fix volume ownership before
+dropping privileges — only the Gupax process tree runs unprivileged. A fresh
+Docker named volume mounts `root:root 0755`; `start.sh` treats a detected
+owner of `0` as "unset" and falls back to `999` rather than running the mining
+stack as root. The CI smoke test mounts a volume and asserts Gupax is non-root
+to keep that from regressing (see #73).
 
 On Unraid, the FUSE filesystem silently ignores `chown`, requiring a fallback
 to world-writable permissions on persistent volumes. This is a fundamental

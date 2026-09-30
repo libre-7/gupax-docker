@@ -151,6 +151,11 @@ EXPOSE 18083 18084 18086 9050
 # Pre-create .bitmonero directory with miner ownership.
 # No .bitmonero symlink needed — monerod resolves its data directory via $HOME
 # (/home/miner) which start.sh passes through gosu to the gupax process.
+#
+# NOTE: /home/miner/.local/share/gupax is deliberately NOT pre-created here.
+# A fresh Docker named volume mounts root:root 0755 regardless, and
+# pre-creating the path would only mask that. start.sh therefore treats a
+# detected owner of 0 as "unset" and falls back to the miner user (999).
 RUN mkdir -p /home/miner/.bitmonero && chown miner:miner /home/miner/.bitmonero
 
 # Container starts as root so start.sh can fix volume permissions.
