@@ -17,9 +17,12 @@
 # The calling workflow step sources this file and exports to GITHUB_ENV.
 # Consumed by docker-publish.yml and docker-hub-push.yml (kept in lockstep).
 #
-# GITHUB_TOKEN (optional): used as Bearer auth for the GitHub API to avoid
-# unauthenticated rate limits on shared CI runner IPs. Falls back to
-# anonymous access when unset (e.g. local runs).
+# GITHUB_TOKEN: used as Bearer auth for the GitHub API to avoid
+# unauthenticated rate limits on shared CI runner IPs. Both registry
+# workflows export secrets.GITHUB_TOKEN to the step that calls this script
+# (see #73 / M4 — it was documented but never wired, so the branch below
+# never executed in CI). Falls back to anonymous access when unset, which
+# is only appropriate for local runs.
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 # Copyright (C) 2024-2026  libre-7

@@ -14,7 +14,7 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
-      issues: write  # failure alert comments on tracking issue #68
+      issues: write  # failure alert comments on the CI watch issue (#76)
 
     steps:
       - name: Checkout code
@@ -38,6 +38,12 @@ jobs:
 
       - name: Detect Gupax version from upstream
         id: version
+        env:
+          # detect-gupax-version.sh uses GITHUB_TOKEN for Bearer auth to avoid
+          # unauthenticated rate limits on GitHub's shared runner IP pool.
+          # Without this the script's token branch never executes and a rate
+          # limit becomes a red build. See #73 (M4).
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           bash .github/scripts/detect-gupax-version.sh
           # detect-gupax-version.sh writes release.env (VERSION + GUPAX_ASSET)
@@ -93,6 +99,6 @@ jobs:
             await github.rest.issues.createComment({
               owner: context.repo.owner,
               repo: context.repo.repo,
-              issue_number: 68,
-              body: `:rotating_light: **Docker Hub build failed** — registries are not being updated.\n\nWorkflow run: ${runUrl}\nBranch/commit: \`${context.ref}\` @ \`${context.sha}\`\n\`:latest\` on Docker Hub remains stale until this is fixed.\n\n_This is an automated alert (failure handler added in the #68 remediation batch)._`
+              issue_number: 76,  # CI watch — keep open, see its body
+              body: `:rotating_light: **Docker Hub build failed** — registries are not being updated.\n\nWorkflow run: ${runUrl}\nBranch/commit: \`${context.ref}\` @ \`${context.sha}\`\n\`:latest\` on Docker Hub remains stale until this is fixed.\n\n_This is an automated alert. Issue #76 is the permanent CI watch target — do not close it, or these alerts stop working._`
             });
