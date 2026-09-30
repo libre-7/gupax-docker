@@ -204,7 +204,17 @@ TORRC
         echo "    │     --trusted-daemon"
         echo "    │"
         echo "    │ Mobile wallets (Cake, Monerujo): add .onion as remote node."
-        echo "    │ RPC is restricted — read-only wallet operations, no admin access."
+        # This claim must be gated: it was previously printed unconditionally,
+        # so setting MONERO_RPC_RESTRICTED=false still told the operator "RPC
+        # is restricted" while the args block below omitted --restricted-rpc.
+        # Port 18081 is mapped to the LAN by both compose and the Unraid
+        # template, so an unrestricted daemon is unauthenticated on the network.
+        if [ "${MONERO_RPC_RESTRICTED:-true}" = "true" ]; then
+            echo "    │ RPC is restricted — read-only wallet operations, no admin access."
+        else
+            echo "    │ ⚠️  RPC is UNRESTRICTED — full admin commands are reachable."
+            echo "    │ ⚠️  Port 18081 is unauthenticated. Do not port-forward it."
+        fi
         echo ""
         HS_KEY="${HS_HOSTNAME}"
         echo "[+] Recommended monerod arguments (Gupax → Node → Arguments):"
