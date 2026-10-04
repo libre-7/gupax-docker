@@ -283,7 +283,7 @@ If you have an existing Monero blockchain on your Unraid server:
 | `VNC_AUTH_TOKEN` | No | *(none)* | Set to require a password on the noVNC/VNC interface |
 | `PUID` | No | *(auto)* | UID to run Gupax as — auto-detected from `gupax-data` volume owner |
 | `PGID` | No | *(auto)* | GID to run Gupax as — auto-detected from `gupax-data` volume owner |
-| `MONERO_RPC_RESTRICTED` | No | `true` | Restrict monerod RPC to view-only commands |
+| `MONERO_RPC_RESTRICTED` | No | `true` | Adds `--restricted-rpc` to the **recommended** monerod arguments printed at startup — you still paste them into Gupax → Node → Arguments and Save |
 | `MONERO_DATA_PATH` | No | `gupax-monero` | Path (volume name or host path) for Monero blockchain data |
 | `SCREEN_RESOLUTION` | No | `1920x1080x24` | Resolution for the virtual X display (WxHxD format) |
 

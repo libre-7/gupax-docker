@@ -38,7 +38,7 @@
   <Config Name="PUID" Target="PUID" Type="Variable" Default="99" Description="User ID for file permissions (Unraid default: 99)" Mode="" Display="advanced" Required="false" Mask="false"/>
   <Config Name="PGID" Target="PGID" Type="Variable" Default="100" Description="Group ID for file permissions (Unraid default: 100)" Mode="" Display="advanced" Required="false" Mask="false"/>
   <Config Name="SCREEN_RESOLUTION" Target="SCREEN_RESOLUTION" Type="Variable" Default="1920x1080x24" Description="Display resolution for Gupax GUI inside the container (default: 1920x1080x24)" Mode="" Display="advanced" Required="false" Mask="false"/>
-  <Config Name="MONERO_RPC_RESTRICTED" Target="MONERO_RPC_RESTRICTED" Type="Variable" Default="true" Description="Restrict RPC to safe, view-only commands (default: true). Set to false only if you need full RPC access for external wallets." Mode="" Display="advanced" Required="false" Mask="false"/>
+  <Config Name="MONERO_RPC_RESTRICTED" Target="MONERO_RPC_RESTRICTED" Type="Variable" Default="true" Description="Adds --restricted-rpc to the recommended monerod arguments printed at startup (you still paste them into Gupax Node Arguments). Set to false only if you need full RPC access for external wallets." Mode="" Display="advanced" Required="false" Mask="false"/>
 
   <Config Name="WebUI" Target="6080" Type="Port" Default="6080" Description="noVNC web interface - connect your browser here" Mode="tcp" Display="always" Required="false" Mask="false"/>
   <Config Name="VNC" Target="5900" Type="Port" Default="5900" Description="VNC server — disabled by default. Only enable if VNC_AUTH_TOKEN is set (exposing unprotected VNC gives full GUI control)" Mode="tcp" Display="advanced" Required="false" Mask="false"/>
