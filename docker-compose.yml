@@ -9,8 +9,11 @@ services:
     stop_grace_period: 30s
     environment:
       - TOR_ENABLED=false      # Set to true to enable Tor SOCKS5 + hidden service
-      # - PUID=99              # UID for Gupax (auto-detected from volume owner if unset)
-      # - PGID=100             # GID for Gupax (auto-detected from volume owner if unset)
+      # PUID/PGID default to 999 (the image's non-root 'miner' user). Override
+      # them to match the host user if you mount a host path that must stay
+      # owned by that user — e.g. an existing Monero blockchain.
+      - PUID=999
+      - PGID=999
       # - VNC_AUTH_TOKEN=change-me  # Uncomment to require VNC password
       # - MONERO_RPC_RESTRICTED=true  # Restrict RPC to view-only (default: true)
     volumes:

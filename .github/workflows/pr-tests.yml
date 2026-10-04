@@ -58,9 +58,19 @@ jobs:
 
       - name: Run container with Tor enabled
         run: |
+          # The gupax-ci-data volume is REQUIRED, not incidental. Without a
+          # volume the data path is missing, start.sh's PUID detection takes
+          # its "|| echo 999" branch, and the container runs as miner/999 —
+          # which is NOT what a fresh named volume does (that mounts
+          # root:root 0755 and yields PUID=0 / gosu 0:0, i.e. the stack
+          # running as root). Mounting the volume here is what makes the
+          # smoke test cover the path every documented user takes.
+          # See #73 (H1).
+          docker volume create gupax-ci-data
           docker run -d --name gupax-test \
             -e TOR_ENABLED=true \
             -p 6080:6080 \
+            -v gupax-ci-data:/home/miner/.local/share/gupax \
             gupax-docker:pr-test
 
       - name: Wait for noVNC web interface
@@ -94,6 +104,23 @@ jobs:
             fi
             sleep 2
           done
+
+      - name: Verify Gupax is NOT running as root (H1 regression test)
+        # Placed after the Gupax wait above, so the process already exists and
+        # this is a single deterministic read rather than another poll loop.
+        # The volume mounted in the run step is what makes this meaningful:
+        # without it start.sh would take the "|| echo 999" branch and pass
+        # regardless. See #73 (H1).
+        run: |
+          GUPAX_PID=$(docker exec gupax-test pgrep -f gupax/gupax | head -1)
+          GUPAX_UID=$(docker exec gupax-test stat -c '%u' "/proc/$GUPAX_PID")
+          echo "Gupax PID $GUPAX_PID running as UID $GUPAX_UID"
+          if [ "$GUPAX_UID" = "0" ]; then
+            echo "FAIL: Gupax is running as root — PUID detection regression (see #73)"
+            docker logs gupax-test
+            exit 1
+          fi
+          echo "PASS: Gupax is non-root (UID $GUPAX_UID)"
 
       - name: Verify Tor SOCKS proxy (9050)
         timeout-minutes: 2
@@ -169,4 +196,6 @@ jobs:
 
       - name: Cleanup
         if: always()
-        run: docker rm -f gupax-test 2>/dev/null || true
+        run: |
+          docker rm -f gupax-test 2>/dev/null || true
+          docker volume rm gupax-ci-data 2>/dev/null || true
