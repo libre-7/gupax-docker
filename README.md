@@ -159,10 +159,10 @@ You'll see output like:
 --restricted-rpc --tx-proxy=tor,127.0.0.1:9050 --anonymous-inbound=dqwj5fyc...onion:18084,127.0.0.1:18086,40
 ```
 
-The complete Start options line should look like:
+The complete Start options line should look like this. **Do not add `--enable-dns-blocklist` when Tor is enabled** — it resolves seed-node DNS over clearnet via `libunbound`, not through the Tor SOCKS proxy, which leaks exactly the kind of metadata this setup exists to hide (see [#14](https://github.com/libre-7/gupax-docker/issues/14)):
 
 ```
---data-dir /home/miner/.bitmonero --zmq-pub tcp://127.0.0.1:18083 --rpc-bind-ip 127.0.0.1 --rpc-bind-port 18081 --out-peers 8 --in-peers 16 --log-level 0 --sync-pruned-blocks --enable-dns-blocklist --disable-dns-checkpoints --prune-blockchain --restricted-rpc --tx-proxy=tor,127.0.0.1:9050 --anonymous-inbound=dqwj5fyc...onion:18084,127.0.0.1:18086,40
+--data-dir /home/miner/.bitmonero --zmq-pub tcp://127.0.0.1:18083 --rpc-bind-ip 127.0.0.1 --rpc-bind-port 18081 --out-peers 8 --in-peers 16 --log-level 0 --sync-pruned-blocks --prune-blockchain --restricted-rpc --tx-proxy=tor,127.0.0.1:9050 --anonymous-inbound=dqwj5fyc...onion:18084,127.0.0.1:18086,40
 ```
 
 **6. Click Save** (Gupax does not auto-save — if you skip this, the arguments are lost on restart)
@@ -287,7 +287,7 @@ If you have an existing Monero blockchain on your Unraid server:
 | `MONERO_DATA_PATH` | No | `gupax-monero` | Path (volume name or host path) for Monero blockchain data |
 | `SCREEN_RESOLUTION` | No | `1920x1080x24` | Resolution for the virtual X display (WxHxD format) |
 
-> **Note:** `GUPAX_VERSION` is managed automatically by the CI workflow — no manual configuration needed. The Docker image is always built with the latest detected upstream Gupax version.
+> **Note:** `GUPAX_VERSION` is managed automatically by the CI workflow — no manual configuration needed. The image is built with the newest **semver-tagged** (`v*.*.*`, non-prerelease) upstream Gupax release that ships a Linux x64 tarball. If upstream publishes a newer build under a non-semver tag, it is skipped; the container's own startup log prints the detected version and asset.
 
 ### Ports
 
