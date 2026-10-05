@@ -425,11 +425,43 @@ This includes:
 
 ### Gupax appears blank or black in the browser
 
-Try refreshing the page and waiting 10-20 seconds for Gupax to fully initialize. If the issue persists, restart the container:
+First, check whether the container is actually unhealthy. The health check
+probes noVNC, the VNC port, the `x11vnc` process, the Gupax process and (when
+enabled) the Tor SOCKS proxy, so it distinguishes "web server up, GUI dead"
+from a full outage:
+
+```bash
+docker inspect gupax --format '{{.State.Health.Status}}'          # healthy / unhealthy
+docker inspect gupax --format '{{json .State.Health.Log}}' | jq  # which probe failed
+```
+
+Note that the health check's `FAIL: …` lines are written to the **health log**,
+so they appear in `docker inspect`, not in `docker logs`. `docker logs` shows
+`start.sh` output instead — resolution warnings, which stage failed, the
+detected upstream version.
+
+A black screen with a `healthy` container is usually just startup latency —
+Gupax takes 10–20s to draw its first window after the VNC stack is up. Wait,
+then reload the page. If it persists:
 
 ```bash
 docker compose restart
 ```
+
+If a restart doesn't help, the X stack is usually the culprit. Common causes:
+
+- **Wrong resolution.** `SCREEN_RESOLUTION` must be `WxHxD` with positive
+  components (e.g. `1920x1080x24`). Invalid values fall back to the default
+  and print a warning at startup — check for `[!] Invalid SCREEN_RESOLUTION`.
+- **A stale X lock file.** The container clears `/tmp/.X1-lock` on startup, but
+  if the filesystem persists `/tmp` across restarts the display can come up
+  stale. Confirm Xvfb actually started with `[+] Xvfb started on :1`.
+- **The keyboard doesn't work but the mouse does.** X autorepeat and XI2 focus
+  routing need a window manager, which is why `openbox` is started. Confirm
+  `[+] openbox started` in the logs — without it, input focus is unreliable.
+- **Resolution too large for the host.** A `3840x2160x24` framebuffer over VNC
+  is heavy and can stall the browser's canvas. Drop to `1920x1080x24` and
+  retry.
 
 ### Connection refused on port 6080
 
@@ -440,6 +472,10 @@ docker compose logs
 docker compose ps
 ```
 
+If the container exited during startup, the log names the stage that failed —
+this script exits non-zero rather than hanging if `Xvfb`, `x11vnc` or
+`websockify` cannot start.
+
 ### Container keeps restarting
 
 Check the logs:
@@ -447,6 +483,12 @@ Check the logs:
 ```bash
 docker compose logs
 ```
+
+A repeated crash-and-restart loop is usually Gupax itself exiting. The exit
+code is propagated, so `[+] Shutdown complete` followed by `Gupax exited
+(code: N)` tells you what it returned. If it exits immediately after start,
+the usual cause is a volume ownership problem — see
+[Ownership Requirements](#ownership-requirements-for-existing-blockchain-files).
 
 ### P2Pool spamming `empty response` / `EBADF` errors
 

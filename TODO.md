@@ -15,8 +15,10 @@
 - [x] **GHCR + Docker Hub CI** — Image builds pushed to both registries on merge to main
 - [ ] **Multi-arch builds** — `linux/arm64` not yet supported: Gupax ships no arm64 Linux binary. Both workflows build `linux/amd64` only (tracked in #61)
 - [x] **CONTRIBUTING.md** — How to submit PRs and report issues
-- [ ] **X11 troubleshooting docs** — Expand troubleshooting for common noVNC issues
-- [ ] **GitHub Releases** — Tagged releases with release notes
+- [x] **X11 troubleshooting docs** — Blank/black-screen, refused port, and restart-loop sections expanded; covers health-probe interpretation, `SCREEN_RESOLUTION` validation/fallback, stale X locks, missing window manager, and framebuffer size
+- [x] **GitHub Releases** — Tagged releases with release notes
+- [ ] **Base image migration** — Pinned to `ubuntu:22.04`; standard support ends April 2027. The 25.10 bump fails on `libasound2` → `libasound2t64` (Ubuntu 25.04+ rename). Tor keyring re-verification needed too. Tracked in #84
+- [x] **Issue templates** — Bug + feature forms, blank issues disabled, contact links for security advisories and upstream Gupax/Monero
 - [ ] **Tor keyring refresh** — The Tor apt keyring is version-pinned in the Dockerfile (`…-keyring_2025.08.08_all.deb`). Dependabot's `docker` ecosystem does not cover it, so it must be bumped by hand before the Tor Project rotates that key — otherwise every build fails at the keyring download.
 
 ## 🟢 Nice to Have — Polish & Production Hardening

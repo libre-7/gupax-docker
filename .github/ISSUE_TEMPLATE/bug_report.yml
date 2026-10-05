@@ -1,0 +1,88 @@
+---
+name: Bug report
+description: Something in gupax-docker doesn't work as documented
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for filing. Please read the Troubleshooting section of the
+        README first — it covers the most common symptoms.
+
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened?
+      description: What did you observe, and what did you expect instead?
+      placeholder: |
+        The container starts but P2Pool logs "empty response" from the RPC
+        port every few seconds. I expected it to connect to monerod.
+    validations:
+      required: true
+
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: Steps to reproduce
+      description: How can someone else get to the same state?
+      placeholder: |
+        1. docker compose up -d
+        2. Open http://localhost:6080
+        3. Enable the Node tab in Settings
+        4. Start P2Pool
+    validations:
+      required: true
+
+  - type: input
+    id: version
+    attributes:
+      label: Image tag
+      description: What is in your compose file or Unraid template?
+      placeholder: ghcr.io/libre-7/gupax-docker:latest
+    validations:
+      required: true
+
+  - type: dropdown
+    id: install-method
+    attributes:
+      label: How are you running it?
+      options:
+        - docker compose
+        - Unraid template
+        - docker run
+        - other
+    validations:
+      required: true
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Container logs
+      description: Output of `docker logs <container>` — please trim to the relevant part.
+      render: shell
+    validations:
+      required: true
+
+  - type: textarea
+    id: env
+    attributes:
+      label: Relevant configuration
+      description: |
+        Environment variables you have set, and whether TOR_ENABLED is on.
+        Please redact any VNC_AUTH_TOKEN value — never paste the token itself.
+      placeholder: |
+        TOR_ENABLED=true
+        PUID=99
+        PGID=100
+    validations:
+      required: false
+
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Checks
+      options:
+        - label: I searched existing issues for this already
+          required: true
+        - label: I read the Troubleshooting section of the README
+          required: false

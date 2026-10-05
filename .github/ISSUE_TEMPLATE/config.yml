@@ -1,0 +1,16 @@
+# Blank issues are disabled: use the bug or feature template.
+# Contact links route security reports and upstream issues to the right place.
+blank_issues_enabled: false
+contact_links:
+  - name: Security vulnerability
+    url: https://github.com/libre-7/gupax-docker/security/advisories/new
+    about: Report privately — do not open a public issue for a security bug.
+  - name: Upstream Gupax issue
+    url: https://github.com/gupax-io/gupax/issues
+    about: Bugs in the Gupax GUI itself belong upstream, not here.
+  - name: Upstream Monero / monerod
+    url: https://github.com/monero-project/monero/issues
+    about: Daemon, RPC and wallet problems belong to the Monero project.
+  - name: Unraid Community Applications forum
+    url: https://forums.unraid.net/topic/38582-plug-in-community-applications/
+    about: Unraid template questions are welcome there.
