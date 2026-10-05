@@ -10,6 +10,22 @@ builds. `v2.0.1` and `v2.0.1-YYYYMMDD` tags are Docker image tags — the
 `v`-prefixed tag is a moving tag that always points to the latest build of that
 upstream release.
 
+## [Unreleased] — 2026-10-05
+
+Base image migration (closes #84):
+
+- `ubuntu:22.04` → `ubuntu:26.04` LTS ("resolute"), still digest-pinned.
+  22.04 standard support ended April 2027.
+- `libasound2` → `libasound2t64`. Ubuntu completed the 64-bit `time_t`
+  transition in 24.04 and no package named `libasound2` exists after that;
+  `libasound2t64` declares `Provides: libasound2`, so the dependency contract
+  is unchanged.
+- Tor apt suite `jammy` → `resolute`, which also lifts Tor to **0.4.9.13**
+  (the 22.04 archive shipped a stale 0.4.6.10 that this repo works around
+  specifically to avoid).
+
+---
+
 ## [Unreleased] — 2026-09-29
 
 Follow-up review ([#73](https://github.com/libre-7/gupax-docker/issues/73)) of the

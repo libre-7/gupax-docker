@@ -8,7 +8,20 @@
 # and persisted in /home/miner/.local/share/gupax via the gupax-data volume.
 # =============================================================================
 
-FROM ubuntu:22.04@sha256:4fff072216d2d3d6accc8bc09b57c33e474edd726f3f65fbadbb05647ab15fa5
+# Ubuntu 26.04 LTS ("resolute"). Migrated from 22.04, whose standard support
+# ends April 2027 — see issue #84.
+#
+# Requires `libasound2t64` rather than `libasound2`: Ubuntu completed the
+# 64-bit-time_t transition in 24.04, and there is NO package literally named
+# `libasound2` in 24.04 or later. `libasound2t64` declares
+# `Provides: libasound2`, so the virtual dependency is still satisfied and
+# sound-using code keeps linking `libasound.so.2` unchanged.
+#
+# NOTE: Gupax's own binary (v2.0.1, ELF64 PIE) contains zero references to
+# libasound or libpulse, so these two packages may be removable outright.
+# They are kept here because GTK/zenity can pull audio transitively; removing
+# them is tracked separately and should not be conflated with this bump.
+FROM ubuntu:26.04@sha256:f144425ff09be612d6d9ad965196e9cdc23dae1f42110a8a11a3e9a8198759f7
 
 # Use bash with pipefail for all RUN commands so that failures in piped
 # commands are not silently ignored (e.g., grep | awk producing empty output).
@@ -34,13 +47,19 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     ca-certificates curl gnupg \
     && rm -rf /var/lib/apt/lists/*
 
-# Tor: use Tor Project's official apt repo to get Tor 0.4.8.x instead of
-# Ubuntu 22.04's stale 0.4.6.10 which lacks FlowCtrl=2 and Relay=4 protocol
-# support.  Without this, Tor will eventually be rejected from the network.
+# Tor: use Tor Project's official apt repo so we get a current Tor (0.4.9.x)
+# rather than the distro's stale 0.4.6.10, which lacks FlowCtrl=2 and
+# Relay=4 protocol support. Without this, Tor is eventually rejected from
+# the network.
+#
+# The suite must track the base image: 22.04 needed `jammy`, 24.04+ needs
+# `noble`/`resolute`. The repo is arch-keyed rather than suite-keyed, so a
+# mismatch still resolves — it just silently mixes release cadences. Keep
+# this line in sync with the FROM above.
 RUN curl -fsSL https://deb.torproject.org/torproject.org/pool/main/d/deb.torproject.org-keyring/deb.torproject.org-keyring_2025.08.08_all.deb \
     -o /tmp/tor-keyring.deb \
     && dpkg -i /tmp/tor-keyring.deb && rm /tmp/tor-keyring.deb \
-    && echo "deb [arch=$(dpkg --print-architecture)] https://deb.torproject.org/torproject.org jammy main" \
+    && echo "deb [arch=$(dpkg --print-architecture)] https://deb.torproject.org/torproject.org resolute main" \
     > /etc/apt/sources.list.d/tor.list \
     && apt-get update \
     && rm -rf /var/lib/apt/lists/*
@@ -53,7 +72,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     novnc \
     websockify \
     libgl1 \
-    libasound2 \
+    libasound2t64 \
     libpulse0 \
     ca-certificates \
     curl \
