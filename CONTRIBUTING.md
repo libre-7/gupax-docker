@@ -69,7 +69,7 @@ Unraid first.
 
 ## Dockerfile conventions
 
-- Base image is digest-pinned (`ubuntu:22.04@sha256:...`)
+- Base image is digest-pinned (`ubuntu:26.04@sha256:...`)
 - All `RUN` commands use bash with `pipefail` (global `SHELL` directive)
 - `apt-get install` always includes `--no-install-recommends` and cleanup
   in the same layer (`rm -rf /var/lib/apt/lists/*`)
