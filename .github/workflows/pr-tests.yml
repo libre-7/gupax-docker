@@ -154,6 +154,45 @@ jobs:
             sleep 3
           done
 
+      - name: Verify Tor version is not the stale distro build
+        run: |
+          # This image adds the Tor Project apt repo for exactly one reason:
+          # the distro's own Tor is too old to be accepted by the network
+          # (missing FlowCtrl=2 / Relay=4). The SOCKS + onion assertions
+          # above still pass on a stale Tor — they prove it runs, not that
+          # it is new enough. That gap let a base-image bump silently
+          # downgrade Tor; assert the version explicitly.
+          #
+          # 0.4.6.10 is the 22.04 archive build this repo works around.
+          # Require >= 0.4.7 and fail loudly with the actual version.
+          #
+          # Accept 2-4 components, not exactly 4: Tor ships 0.4.6.10 but a
+          # future 1.0.0 must not be unparseable (that would reject a newer,
+          # perfectly good Tor). Padded to 4 components for a tidy,
+          # predictable log line — note this is cosmetic, NOT a correctness
+          # fix: `sort -V` already orders ragged versions correctly, which
+          # the mutation test in the PR description verifies.
+          TOR_VER="$(docker exec gupax-test tor --version 2>/dev/null | head -1 \
+            | grep -oE '[0-9]+(\.[0-9]+){1,3}' | head -1 || true)"
+          if [ -z "$TOR_VER" ]; then
+            echo "FAIL: could not determine the Tor version inside the container"
+            docker exec gupax-test tor --version 2>&1 || true
+            exit 1
+          fi
+          # Normalise to 4 components for a correct dotted comparison.
+          while [ "$(echo "$TOR_VER" | tr -cd '.' | wc -c)" -lt 3 ]; do
+            TOR_VER="${TOR_VER}.0"
+          done
+          echo "Tor version in container: $TOR_VER"
+          LOWEST_OK="0.4.7.0"
+          if [ "$(printf '%s\n%s\n' "$LOWEST_OK" "$TOR_VER" | sort -V | head -1)" != "$LOWEST_OK" ]; then
+            echo "FAIL: Tor $TOR_VER is older than the required floor $LOWEST_OK"
+            echo "      The Tor Project apt repo is not being applied — check the"
+            echo "      suite in the Dockerfile's tor.list line matches the base image."
+            exit 1
+          fi
+          echo "PASS: Tor $TOR_VER is at or above the $LOWEST_OK floor"
+
       - name: Verify hidden service hostname
         run: |
           for i in $(seq 1 15); do
