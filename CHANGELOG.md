@@ -8,21 +8,89 @@ Versions follow the scheme `v{upstream-gupax}-{build-date}`. The base version
 tracks which Gupax release is bundled; the date suffix differentiates container
 builds. `v2.0.1` and `v2.0.1-YYYYMMDD` tags are Docker image tags — the
 `v`-prefixed tag is a moving tag that always points to the latest build of that
-upstream release.
+upstream release. `v2.0.1-YYYYMMDD-<sha7>` adds the commit and is the immutable
+reference; a same-day rebuild can replace the plain date tag.
+
+## [Unreleased] — 2026-10-18
+
+Code-review remediation (22 findings). Runtime verification of the container
+changes was not possible in the review environment; the CI job in
+`.github/workflows/pr-tests.yml` is the executable gate for every runtime
+assertion listed here.
+
+### Fixed
+
+- **XMRig could not start on the default UID 999** (GUP-01) — the `gupax`
+  group was only created inside a block that was skipped whenever the UID
+  already existed, and `useradd -g <gid>` failed for a GID absent from the
+  image. `setup-runtime-user.sh` now always creates the group, resolves or
+  creates the primary group, adds the runtime user to `gupax`, and fails
+  closed. CI exercises 999/999, 99/100 and 1000/1000.
+- **`.env` was inert** (GUP-02) — every user-facing variable is interpolated
+  in `docker-compose.yml`, and CI asserts a `.env` file reaches the rendered
+  service.
+- **Unraid published unauthenticated VNC 5900** (GUP-03) — the template's VNC
+  port now defaults to empty, and without `VNC_AUTH_TOKEN` x11vnc binds to
+  loopback (`-localhost`), so noVNC still works but the port cannot expose an
+  unauthenticated desktop.
+- **Wallet RPC was published on the hidden service** (GUP-04) — now opt-in via
+  `TOR_EXPOSE_RPC=true`, with a loud warning when RPC is unrestricted.
+- **gosu failure fell back to root** (GUP-05) — the entrypoint now exits with
+  a clear error instead of running the mining stack as root.
+- **Healthcheck could not see a hung Gupax or unbootstrapped Tor** (GUP-06) —
+  added a Tor ControlPort/bootstrap check, an X server probe, a Gupax window
+  check and a `/proc` process-state check (stopped/zombie).
+- **No init/reaper** (GUP-07) — `init: true` in compose and `--init` in the
+  Unraid template; CI asserts PID 1 is `docker-init`.
+- **NOPASSWD root on a writable XMRig binary** (GUP-08) — removed the sudo
+  rule and the `sudo` package. XMRig runs unprivileged; the pkexec wrapper is
+  a passthrough. FUSE permissions are group-first with a verified fallback.
+- **CI never exercised the hardened capability profile** (GUP-09) — the smoke
+  container now runs with the exact compose cap set, asserted by a
+  cross-surface contract test.
+- **Two independent registry builds** (GUP-10) — one build pushes the same
+  digest to GHCR and Docker Hub; a step verifies both digests match. The
+  former Docker Hub workflow is now a manual manifest-mirror repair path.
+- **`docker run` example omitted hardening and the Tor volume** (GUP-11) —
+  mirrors compose (`--init`, cap drop/add, stop timeout, `gupax-tor`).
+- **Tor provenance gate only checked a version floor** (GUP-12) — CI asserts
+  the installed package comes from `deb.torproject.org`.
+- **Tor ran as root** (GUP-13) — runs as `debian-tor` when the volume allows
+  ownership changes; SECURITY.md now states exactly which processes stay root.
+- **Banner claimed tx-only mode regardless of monerod args** (GUP-14) —
+  reworded to distinguish starting Tor from routing through it.
+- **Gupax tarball was not hash-pinned** (GUP-15) — `gupax-checksums.txt`
+  supplies the trusted digest; the upstream sums remain a secondary check.
+  Unpinned auto-detected releases emit a CI warning.
+- **Tor package/keyring were not immutably pinned** (GUP-16) — keyring `.deb`
+  SHA256 and `tor=<version>` are pinned build args.
+- **No stop timeout on Unraid** (GUP-17) — `--stop-timeout=30` matches
+  compose.
+- **Documentation drift** (GUP-18) — corrected the PUID/PGID defaults, the
+  startup-log claim, the VNC security wording, the version-support wording,
+  the duplicate TODO checkbox, CONTRIBUTING's UID description, the
+  `.dockerignore` stale entry and the hadolint DL3008 rationale.
+- **Non-canonical licence and missing provenance labels** (GUP-19) —
+  `GPL-3.0-or-later`, `revision`, `created`.
+- **VNC tokens were silently truncated** (GUP-20) — startup warns when the
+  token exceeds the 8-character protocol limit.
+- **Healthcheck's internal timeout equalled Docker's** (GUP-21) — reduced to
+  3s against Docker's 5s.
+- **Newer non-semver releases were skipped silently** (GUP-22) — the detector
+  emits a warning naming the skipped tag; fixtures pin the behaviour.
 
 ## [Unreleased] — 2026-10-05
 
 Base image migration (closes #84):
 
 - `ubuntu:22.04` → `ubuntu:26.04` LTS ("resolute"), still digest-pinned.
-  22.04 standard support ended April 2027.
+  22.04 standard support ends April 2027.
 - `libasound2` → `libasound2t64`. Ubuntu completed the 64-bit `time_t`
   transition in 24.04 and no package named `libasound2` exists after that;
   `libasound2t64` declares `Provides: libasound2`, so the dependency contract
   is unchanged.
-- Tor apt suite `jammy` → `resolute`, which also lifts Tor to **0.4.9.13**
-  (the 22.04 archive shipped a stale 0.4.6.10 that this repo works around
-  specifically to avoid).
+- Tor apt suite `jammy` → `resolute`, which also brought a current Tor
+  (0.4.9.x; the pin now names the exact version).
 
 ---
 

@@ -73,9 +73,11 @@ Unraid first.
 - All `RUN` commands use bash with `pipefail` (global `SHELL` directive)
 - `apt-get install` always includes `--no-install-recommends` and cleanup
   in the same layer (`rm -rf /var/lib/apt/lists/*`)
-- Tor is installed from the Tor Project apt repo, not Ubuntu's stale package
+- Tor is installed from the Tor Project apt repo (pinned version + keyring
+  SHA256), not Ubuntu's archive package
 - The container starts as root so `start.sh` can fix volume permissions,
-  then drops to the `miner` user via `gosu`
+  then drops to the `PUID`/`PGID` principal via `gosu` (the image's `miner`
+  user at 999 by default, or a `gupax` user created for a custom UID)
 
 ## Shell script conventions
 

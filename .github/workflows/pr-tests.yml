@@ -8,7 +8,7 @@ on:
 
 jobs:
   lint:
-    name: Lint (Shell + Dockerfile + YAML)
+    name: Lint (Shell + Dockerfile + YAML + contract)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
@@ -17,9 +17,9 @@ jobs:
         uses: ludeeus/action-shellcheck@00cae500b08a931fb5698e11e79bfbd38e612a38 # 2.0.0
         with:
           # scandir '.' already matches every *.sh in the tree, so this covers
-          # start.sh, healthcheck.sh and .github/scripts/detect-gupax-version.sh.
-          # (The action's `additional_files` is folded into the same `find`, which
-          # is why an explicit list here would be a no-op.)
+          # start.sh, healthcheck.sh, the user/tor helpers and every script in
+          # .github/scripts/. (The action's `additional_files` is folded into
+          # the same `find`, which is why an explicit list here would be a no-op.)
           scandir: '.'
           # Raised from `error` to `style` (the strictest level) — start.sh is
           # now clean at style, so this is enforceable rather than aspirational.
@@ -41,12 +41,59 @@ jobs:
             docker-compose.yml
 
       - name: Validate docker-compose config
-        run: docker compose -f docker-compose.yml config --dry-run
+        run: docker compose -f docker-compose.yml config --quiet
+
+      - name: .env values reach the rendered service (GUP-02)
+        # Compose only interpolates ${VAR} inside the compose file; it does not
+        # inject .env by itself. This asserts that the documented `cp
+        # .env.example .env` workflow actually changes the container config.
+        run: |
+          cat > .env <<'EOF'
+          TOR_ENABLED=true
+          TOR_EXPOSE_RPC=true
+          PUID=1234
+          PGID=1234
+          VNC_AUTH_TOKEN=testtoken
+          MONERO_RPC_RESTRICTED=false
+          SCREEN_RESOLUTION=1280x720x24
+          EOF
+          docker compose config --format json > rendered.json
+          python3 - <<'PY'
+          import json, sys
+          env = json.load(open("rendered.json"))["services"]["gupax"]["environment"]
+          expected = {
+              "TOR_ENABLED": "true",
+              "TOR_EXPOSE_RPC": "true",
+              "PUID": "1234",
+              "PGID": "1234",
+              "VNC_AUTH_TOKEN": "testtoken",
+              "MONERO_RPC_RESTRICTED": "false",
+              "SCREEN_RESOLUTION": "1280x720x24",
+          }
+          bad = {k: (env.get(k), v) for k, v in expected.items() if env.get(k) != v}
+          if bad:
+              print(f"FAIL: .env not applied: {bad}", file=sys.stderr)
+              sys.exit(1)
+          print("PASS: every .env value reached the container environment")
+          PY
+          rm -f .env rendered.json
+
+      - name: Cross-surface runtime contract (GUP-03/07/09/10/17/19/21)
+        run: python3 .github/scripts/verify-runtime-contract.py
+
+      - name: Detect-version fixtures (GUP-22)
+        run: bash .github/scripts/test-detect-version.sh
+
+      - name: Runtime-user logic fixtures (GUP-01)
+        run: bash .github/scripts/test-runtime-user.sh
+
+      - name: Tor bootstrap probe fixtures (GUP-06)
+        run: bash .github/scripts/test-tor-bootstrap.sh
 
   build-and-test:
     name: Build + Runtime Smoke Test (Tor)
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 
@@ -63,22 +110,38 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
-      - name: Run container with Tor enabled
+      - name: Run container under the shipped capability profile (GUP-09)
         run: |
           # The gupax-ci-data volume is REQUIRED, not incidental. Without a
-          # volume the data path is missing, start.sh's PUID detection takes
-          # its "|| echo 999" branch, and the container runs as miner/999 —
-          # which is NOT what a fresh named volume does (that mounts
-          # root:root 0755 and yields PUID=0 / gosu 0:0, i.e. the stack
-          # running as root). Mounting the volume here is what makes the
-          # smoke test cover the path every documented user takes.
+          # volume the data path is missing and start.sh's PUID detection takes
+          # a different branch than a fresh named volume (root:root 0755).
           # See #73 (H1).
+          #
+          # --init: pid 1 is docker-init, so orphaned monerod/P2Pool/XMRig
+          # grandchildren are reaped (#GUP-07).
+          # The cap set is copied from docker-compose.yml and asserted equal by
+          # verify-runtime-contract.py — CI must not test a more privileged
+          # container than users run.
           docker volume create gupax-ci-data
           docker run -d --name gupax-test \
+            --init \
+            --cap-drop=ALL \
+            --cap-add=SETUID --cap-add=SETGID --cap-add=DAC_OVERRIDE \
+            --cap-add=FOWNER --cap-add=CHOWN \
             -e TOR_ENABLED=true \
             -p 6080:6080 \
             -v gupax-ci-data:/home/miner/.local/share/gupax \
             gupax-docker:pr-test
+
+      - name: Verify PID 1 is an init/reaper (GUP-07)
+        run: |
+          PID1=$(docker exec gupax-test cat /proc/1/comm)
+          echo "PID 1: $PID1"
+          if [ "$PID1" != "docker-init" ]; then
+            echo "FAIL: PID 1 is '$PID1', expected docker-init (--init)"
+            exit 1
+          fi
+          echo "PASS: docker-init is reaping orphans"
 
       - name: Wait for noVNC web interface
         timeout-minutes: 2
@@ -101,9 +164,8 @@ jobs:
         run: |
           # `pgrep -f gupax` matched ANY process whose command line contains
           # "gupax" — including the runtime-downloaded
-          # /home/miner/.local/share/gupax/xmrig/xmrig. If the Gupax GUI died
-          # but a downloaded daemon was running, this gate passed. Match the
-          # same specific pattern healthcheck.sh:38 uses. See #73 (L1).
+          # /home/miner/.local/share/gupax/xmrig/xmrig. Match the same specific
+          # pattern healthcheck.sh uses. See #73 (L1).
           for i in $(seq 1 15); do
             if docker exec gupax-test pgrep -f gupax/gupax 2>/dev/null; then
               echo "Gupax ready after ${i} attempts"
@@ -118,11 +180,6 @@ jobs:
           done
 
       - name: Verify Gupax is NOT running as root (H1 regression test)
-        # Placed after the Gupax wait above, so the process already exists and
-        # this is a single deterministic read rather than another poll loop.
-        # The volume mounted in the run step is what makes this meaningful:
-        # without it start.sh would take the "|| echo 999" branch and pass
-        # regardless. See #73 (H1).
         run: |
           GUPAX_PID=$(docker exec gupax-test pgrep -f gupax/gupax | head -1)
           GUPAX_UID=$(docker exec gupax-test stat -c '%u' "/proc/$GUPAX_PID")
@@ -134,13 +191,81 @@ jobs:
           fi
           echo "PASS: Gupax is non-root (UID $GUPAX_UID)"
 
+      - name: Verify the gupax group exists on the default UID path (GUP-01)
+        # The original bug: UID 999 already exists as `miner`, so the whole
+        # user-creation block was skipped and no gupax group was created.
+        run: |
+          docker exec gupax-test getent group gupax
+          docker exec gupax-test bash -c \
+            'id -nG "$(getent passwd 999 | cut -d: -f1)" | tr " " "\n" | grep -qx gupax'
+          echo "PASS: UID 999 is a member of the gupax group"
+
+      - name: User setup matrix 999/999, 99/100, 1000/1000 (GUP-01)
+        # PUID=99/PGID=100 (Unraid) and PUID=1000/PGID=1000 (typical host user)
+        # were never exercised. The 1000/1000 case used to fail because
+        # `useradd -g 1000` requires an existing group.
+        #
+        # Setup and assertion run in the SAME container: useradd writes only
+        # that container's /etc, so a separate `docker run` would not see it.
+        run: |
+          set -e
+          for pair in "999 999" "99 100" "1000 1000"; do
+            set -- $pair
+            echo "--- PUID=$1 PGID=$2"
+            docker run --rm -e PUID="$1" -e PGID="$2" --entrypoint bash \
+              gupax-docker:pr-test -c '
+                set -e
+                /usr/local/bin/setup-runtime-user.sh
+                USER_NAME=$(getent passwd "$PUID" | cut -d: -f1)
+                [ -n "$USER_NAME" ]
+                id -nG "$USER_NAME" | tr " " "\n" | grep -qx gupax
+                echo "OK: $USER_NAME (UID $PUID) is in gupax"
+              '
+          done
+          echo "PASS: all three UID/GID configurations resolve and join gupax"
+
+      - name: XMRig launch path runs unprivileged (GUP-01/GUP-08)
+        # Gupax spawns XMRig through pkexec. There is no NOPASSWD sudo rule any
+        # more: the binary lives on a writable volume, so root execution of it
+        # was a container-root escalation primitive. Assert the pkexec wrapper
+        # runs the target as the runtime UID and that sudo is absent.
+        run: |
+          docker run --rm --entrypoint bash gupax-docker:pr-test -c '
+            set -e
+            mkdir -p /home/miner/.local/share/gupax/xmrig
+            printf "#!/bin/sh\nid -u\n" > /home/miner/.local/share/gupax/xmrig/xmrig
+            chmod 755 /home/miner/.local/share/gupax/xmrig/xmrig
+            chown 999:999 /home/miner/.local/share/gupax/xmrig/xmrig
+            OUT=$(gosu 999:999 /usr/local/bin/pkexec /home/miner/.local/share/gupax/xmrig/xmrig)
+            echo "pkexec -> xmrig reported UID $OUT"
+            [ "$OUT" = "999" ]
+            ! command -v sudo >/dev/null 2>&1
+          '
+          echo "PASS: pkexec runs XMRig as UID 999 and sudo is not installed"
+
+      - name: Invalid PUID fails closed instead of running as root (GUP-05)
+        run: |
+          docker run -d --name gupax-badpuid -e PUID=notanumber \
+            -v gupax-ci-data:/home/miner/.local/share/gupax \
+            gupax-docker:pr-test >/dev/null
+          for i in $(seq 1 20); do
+            RUNNING=$(docker inspect gupax-badpuid --format='{{.State.Running}}')
+            [ "$RUNNING" = "false" ] && break
+            sleep 1
+          done
+          CODE=$(docker inspect gupax-badpuid --format='{{.State.ExitCode}}')
+          docker logs gupax-badpuid 2>&1 | tee badpuid.log
+          docker rm -f gupax-badpuid >/dev/null 2>&1 || true
+          if [ "$CODE" = "0" ]; then
+            echo "FAIL: container with PUID=notanumber exited 0"
+            exit 1
+          fi
+          grep -q 'PUID must be a positive integer' badpuid.log
+          echo "PASS: invalid PUID exited $CODE with a clear error"
+
       - name: Verify Tor SOCKS proxy (9050)
         timeout-minutes: 2
         run: |
-          # Fatal, not a warning. Tor is the most complex code path in this
-          # project and a regression here previously passed CI green. 20
-          # attempts x 3s = 60s of budget, which the live run cleared on
-          # attempt 1. See #73 (M3).
           for i in $(seq 1 20); do
             if docker exec gupax-test bash -c 'echo > /dev/tcp/127.0.0.1/9050' 2>/dev/null; then
               echo "Tor SOCKS proxy ready (attempt ${i})"
@@ -154,24 +279,44 @@ jobs:
             sleep 3
           done
 
-      - name: Verify Tor version is not the stale distro build
+      - name: Verify Tor has completed bootstrap (GUP-06)
+        timeout-minutes: 3
         run: |
-          # This image adds the Tor Project apt repo for exactly one reason:
-          # the distro's own Tor is too old to be accepted by the network
-          # (missing FlowCtrl=2 / Relay=4). The SOCKS + onion assertions
-          # above still pass on a stale Tor — they prove it runs, not that
-          # it is new enough. That gap let a base-image bump silently
-          # downgrade Tor; assert the version explicitly.
-          #
-          # 0.4.6.10 is the 22.04 archive build this repo works around.
-          # Require >= 0.4.7 and fail loudly with the actual version.
-          #
-          # Accept 2-4 components, not exactly 4: Tor ships 0.4.6.10 but a
-          # future 1.0.0 must not be unparseable (that would reject a newer,
-          # perfectly good Tor). Padded to 4 components for a tidy,
-          # predictable log line — note this is cosmetic, NOT a correctness
-          # fix: `sort -V` already orders ragged versions correctly, which
-          # the mutation test in the PR description verifies.
+          for i in $(seq 1 30); do
+            if docker exec gupax-test /usr/local/bin/tor-bootstrap-check.sh \
+              127.0.0.1 9051 /home/miner/.tor/control_auth_cookie; then
+              echo "PASS: Tor reached PROGRESS=100 (attempt ${i})"
+              exit 0
+            fi
+            sleep 5
+          done
+          echo "FAIL: Tor never completed bootstrap within 150s"
+          docker exec gupax-test cat /home/miner/.tor/torrc || true
+          docker logs gupax-test
+          exit 1
+
+      - name: Verify Tor runs as debian-tor (GUP-13)
+        run: |
+          TOR_USER=$(docker exec gupax-test ps -o user= -C tor | tr -d ' ')
+          echo "Tor process user: $TOR_USER"
+          if [ "$TOR_USER" != "debian-tor" ]; then
+            echo "FAIL: Tor is running as '$TOR_USER', expected debian-tor"
+            docker exec gupax-test cat /home/miner/.tor/torrc || true
+            exit 1
+          fi
+          echo "PASS: Tor is unprivileged"
+
+      - name: Verify wallet RPC is NOT published on the hidden service by default (GUP-04)
+        run: |
+          docker exec gupax-test cat /home/miner/.tor/torrc
+          if docker exec gupax-test grep -q 'HiddenServicePort 18081' /home/miner/.tor/torrc; then
+            echo "FAIL: hidden service publishes 18081 without TOR_EXPOSE_RPC=true"
+            exit 1
+          fi
+          echo "PASS: hidden service exposes P2P inbound only"
+
+      - name: Verify Tor version and repository provenance (GUP-12/GUP-16)
+        run: |
           TOR_VER="$(docker exec gupax-test tor --version 2>/dev/null | head -1 \
             | grep -oE '[0-9]+(\.[0-9]+){1,3}' | head -1 || true)"
           if [ -z "$TOR_VER" ]; then
@@ -179,19 +324,23 @@ jobs:
             docker exec gupax-test tor --version 2>&1 || true
             exit 1
           fi
-          # Normalise to 4 components for a correct dotted comparison.
-          while [ "$(echo "$TOR_VER" | tr -cd '.' | wc -c)" -lt 3 ]; do
-            TOR_VER="${TOR_VER}.0"
-          done
           echo "Tor version in container: $TOR_VER"
-          LOWEST_OK="0.4.7.0"
-          if [ "$(printf '%s\n%s\n' "$LOWEST_OK" "$TOR_VER" | sort -V | head -1)" != "$LOWEST_OK" ]; then
-            echo "FAIL: Tor $TOR_VER is older than the required floor $LOWEST_OK"
-            echo "      The Tor Project apt repo is not being applied — check the"
-            echo "      suite in the Dockerfile's tor.list line matches the base image."
+          if [ "$TOR_VER" != "0.4.9.14" ]; then
+            echo "FAIL: Tor $TOR_VER does not match the pinned 0.4.9.14"
             exit 1
           fi
-          echo "PASS: Tor $TOR_VER is at or above the $LOWEST_OK floor"
+          # The version alone could come from the Ubuntu archive once it
+          # catches up. Assert the origin apt recorded at build time (the
+          # package lists are deleted from the final image, so a runtime
+          # `apt-cache policy` would only show /var/lib/dpkg/status).
+          POLICY=$(docker exec gupax-test cat /usr/local/share/gupax-docker/tor-policy.txt)
+          echo "$POLICY"
+          INSTALLED_LINE=$(echo "$POLICY" | grep -A1 '\*\*\*' | head -2)
+          if ! echo "$INSTALLED_LINE" | grep -q 'deb.torproject.org'; then
+            echo "FAIL: installed tor does not come from deb.torproject.org"
+            exit 1
+          fi
+          echo "PASS: Tor $TOR_VER installed from deb.torproject.org"
 
       - name: Verify hidden service hostname
         run: |
@@ -213,12 +362,7 @@ jobs:
         timeout-minutes: 3
         run: |
           # Poll instead of a single read. HEALTHCHECK runs on interval=30s
-          # with start-period=60s, so a fixed `sleep 5` is a race: the
-          # previous gate read `healthy` at T+15.5s on a fast runner but
-          # would see `starting` on a slow one and fail a working build.
-          # #72 correctly tightened the accepted value from
-          # `healthy|starting|no-healthcheck` to `healthy` only; this adds the
-          # bounded wait that makes that strictness safe. See #73 (L2).
+          # with start-period=60s, so a fixed `sleep 5` is a race. See #73 (L2).
           for i in $(seq 1 24); do
             HEALTH=$(docker inspect gupax-test --format='{{.State.Health.Status}}' 2>/dev/null || echo "no-healthcheck")
             echo "Container health: $HEALTH (attempt ${i})"
@@ -230,6 +374,7 @@ jobs:
               unhealthy)
                 echo "FAIL: container reported unhealthy"
                 docker logs gupax-test
+                docker exec gupax-test /usr/local/bin/healthcheck.sh || true
                 exit 1
                 ;;
             esac
@@ -239,12 +384,45 @@ jobs:
           docker logs gupax-test
           exit 1
 
+      - name: Health check detects a stopped Gupax (GUP-06)
+        # pgrep alone passes for a SIGSTOPped process, and its window still
+        # exists. The healthcheck reads /proc/<pid>/stat state.
+        run: |
+          # CAP_KILL is dropped, so root cannot signal a process owned by
+          # the runtime UID. A same-UID signal needs no capability — probe as
+          # the owner. (`docker exec id -u` would report 0: the exec user.)
+          GUPAX_UID=$(docker exec gupax-test sh -c 'ps -o uid= -C gupax | tr -d " " | head -1')
+          [ -n "$GUPAX_UID" ] || { echo "FAIL: no gupax process found"; exit 1; }
+          echo "gupax runs as UID $GUPAX_UID"
+          docker exec -u "$GUPAX_UID" gupax-test pkill -STOP -f gupax/gupax
+          for i in $(seq 1 24); do
+            HEALTH=$(docker inspect gupax-test --format='{{.State.Health.Status}}')
+            if [ "$HEALTH" = "unhealthy" ]; then
+              echo "PASS: stopped Gupax detected after ${i} probes"
+              break
+            fi
+            if [ $i -eq 24 ]; then
+              echo "FAIL: stopped Gupax NOT detected within 120s"
+              docker exec gupax-test /usr/local/bin/healthcheck.sh || true
+              exit 1
+            fi
+            sleep 5
+          done
+          # Recover and prove the healthcheck is not one-way.
+          docker exec -u "$GUPAX_UID" gupax-test pkill -CONT -f gupax/gupax
+          for i in $(seq 1 24); do
+            HEALTH=$(docker inspect gupax-test --format='{{.State.Health.Status}}')
+            if [ "$HEALTH" = "healthy" ]; then
+              echo "PASS: healthy again after SIGCONT"
+              exit 0
+            fi
+            sleep 5
+          done
+          echo "FAIL: container did not return to healthy after SIGCONT"
+          exit 1
+
       - name: Health check detects dead VNC stack (M1 regression test)
         # Final test — the container is sacrificed by design.
-        # M1: healthcheck.sh previously probed only websockify's static file
-        # server, which keeps serving index.html even after x11vnc dies.
-        # It now probes the VNC port (5900) and the x11vnc/Gupax processes.
-        # Kill x11vnc and confirm the container transitions to unhealthy.
         run: |
           docker exec gupax-test pkill -x x11vnc
           # HEALTHCHECK: interval 30s, retries 3 → worst case ~90s to flip
@@ -268,5 +446,5 @@ jobs:
       - name: Cleanup
         if: always()
         run: |
-          docker rm -f gupax-test 2>/dev/null || true
+          docker rm -f gupax-test gupax-badpuid 2>/dev/null || true
           docker volume rm gupax-ci-data 2>/dev/null || true

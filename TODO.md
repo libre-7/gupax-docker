@@ -12,20 +12,20 @@
 
 - [x] **Blockchain volume** — Mount existing Monero blockchain at `/home/miner/.bitmonero`
 - [x] **PR test pipeline** — Lint (shellcheck + hadolint + yamllint) + smoke test on PRs
-- [x] **GHCR + Docker Hub CI** — Image builds pushed to both registries on merge to main
-- [ ] **Multi-arch builds** — `linux/arm64` not yet supported: Gupax ships no arm64 Linux binary. Both workflows build `linux/amd64` only (tracked in #61)
+- [x] **GHCR + Docker Hub CI** — One build pushed to both registries on merge to main (same digest)
+- [ ] **Multi-arch builds** — `linux/arm64` not yet supported: Gupax ships no arm64 Linux binary. The release build is `linux/amd64` only (tracked in #61)
 - [x] **CONTRIBUTING.md** — How to submit PRs and report issues
 - [x] **X11 troubleshooting docs** — Blank/black-screen, refused port, and restart-loop sections expanded; covers health-probe interpretation, `SCREEN_RESOLUTION` validation/fallback, stale X locks, missing window manager, and framebuffer size
 - [x] **GitHub Releases** — Tagged releases with release notes
-- [x] **Base image migration** — Migrated `ubuntu:22.04` → `ubuntu:26.04` LTS ("resolute"); 22.04 standard support ended April 2027. Required renaming `libasound2` → `libasound2t64` (no package named `libasound2` exists in 24.04+; the t64 package `Provides: libasound2`) and moving the Tor apt suite `jammy` → `resolute`, which also brings Tor to 0.4.9.13. Closes #84
+- [x] **Base image migration** — Migrated `ubuntu:22.04` → `ubuntu:26.04` LTS ("resolute"); 22.04 standard support ends April 2027. Required renaming `libasound2` → `libasound2t64` (no package named `libasound2` exists in 24.04+; the t64 package `Provides: libasound2`) and moving the Tor apt suite `jammy` → `resolute`; Tor is now pinned to the Tor Project build. Closes #84
 - [ ] **Drop the audio packages** — Gupax's binary (v2.0.1 ELF64 PIE) contains zero references to `libasound`/`libpulse`, so `libasound2t64` and `libpulse0` may be removable outright. Kept in the 26.04 migration because GTK/zenity can pull audio transitively — verify separately
 - [x] **Issue templates** — Bug + feature forms, blank issues disabled, contact links for security advisories and upstream Gupax/Monero
-- [ ] **Tor keyring refresh** — The Tor apt keyring is version-pinned in the Dockerfile (`…-keyring_2025.08.08_all.deb`). Dependabot's `docker` ecosystem does not cover it, so it must be bumped by hand before the Tor Project rotates that key — otherwise every build fails at the keyring download.
+- [ ] **Tor pin refresh** — Both the keyring `.deb` SHA256 and `tor=<version>` are pinned in the Dockerfile. Dependabot covers neither, so both must be bumped by hand (together) when the Tor Project rotates the keyring or removes the pinned package from the pool — otherwise the build fails loudly at the keyring check or at apt resolution.
 
 ## 🟢 Nice to Have — Polish & Production Hardening
 
 - [x] **Non-root user** — Gupax runs as a non-root user via `gosu` (default UID 999; `PUID`/`PGID` override). CI asserts this on every PR.
-- [x] **Version pinning** — Gupax GUI version pinned with SHA256 checksum verification. ⚠️ The P2Pool/XMRig/monerod binaries Gupax downloads at **runtime** are not checksum-verified by this image.
+- [x] **Version pinning** — The Gupax tarball is verified against an in-repo SHA256 pin (`gupax-checksums.txt`); the upstream SHA256SUMS is a secondary, same-origin check. ⚠️ The P2Pool/XMRig/monerod binaries Gupax downloads at **runtime** are not checksum-verified by this image.
 - [x] **Automatic restart** — `restart: unless-stopped` in compose
 - [x] **VNC password** — Optional password protection for noVNC interface
 - [ ] **Read-only root filesystem** — Mark image as `read_only: true` where possible
@@ -35,8 +35,6 @@
 
 - [x] **README.md** — Quick Start, noVNC setup, configuration, troubleshooting
 - [x] **CHANGELOG.md** — Track changes per release
-
-- [ ] **GitHub Issues templates** — Bug report and feature request templates
 
 ## 🧪 Testing & Validation
 
