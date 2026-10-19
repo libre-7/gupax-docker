@@ -1,4 +1,8 @@
 ignored:
-  - DL3008   # Pin versions in apt-get install (pinned via base image SHA)
+  # apt packages are deliberately not version-pinned (except tor, which is).
+  # Reproducibility comes from the digest-pinned base image plus the explicit
+  # tor/keyring pins; pinning every transitive apt package would break builds
+  # on every Ubuntu security update.
+  - DL3008
   - DL3059   # Multiple consecutive RUN instructions (keeps layers cacheable)
   - SC2046   # Quote eval (handled explicitly)

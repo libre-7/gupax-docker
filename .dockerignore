@@ -6,10 +6,9 @@
 .git
 .gitignore
 
-# Documentation
+# Documentation and non-build inputs
 README.md
 LICENSE
-docs/
 
 # Docker
 docker-compose.yml
@@ -30,5 +29,7 @@ Thumbs.db
 .env
 .env.*
 
-# Remaining markdown (CHANGELOG, SECURITY, CONTRIBUTING, TODO, templates/)
+# Remaining markdown at the repository root (CHANGELOG, SECURITY, CONTRIBUTING,
+# TODO). templates/ is excluded by the same rule; its XML is a distribution
+# artifact, not a build input.
 *.md
