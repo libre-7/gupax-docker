@@ -8,7 +8,7 @@
 # and persisted in /home/miner/.local/share/gupax via the gupax-data volume.
 # =============================================================================
 
-FROM ubuntu:22.04@sha256:4fff072216d2d3d6accc8bc09b57c33e474edd726f3f65fbadbb05647ab15fa5
+FROM ubuntu:26.04@sha256:6a06111c3b0a8600feadb270aec771dc239bf407b25625f93f44ab00e11f4d3c
 
 # Use bash with pipefail for all RUN commands so that failures in piped
 # commands are not silently ignored (e.g., grep | awk producing empty output).
