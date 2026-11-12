@@ -7,15 +7,24 @@ services:
     container_name: gupax
     restart: unless-stopped
     stop_grace_period: 30s
+    # Reap orphaned grandchildren. Gupax restarts monerod/P2Pool/XMRig, and
+    # bash as PID 1 only reaps jobs it knows about (#GUP-07).
+    init: true
+    # Every user-facing variable is interpolated from .env. Compose does not
+    # inject .env into the container by itself, so hard-coded literals here
+    # made `cp .env.example .env` silently inert — including VNC_AUTH_TOKEN
+    # (#GUP-02). `docker compose config` assertions in CI cover this.
     environment:
-      - TOR_ENABLED=false      # Set to true to enable Tor SOCKS5 + hidden service
+      TOR_ENABLED: "${TOR_ENABLED:-false}"
+      TOR_EXPOSE_RPC: "${TOR_EXPOSE_RPC:-false}"
       # PUID/PGID default to 999 (the image's non-root 'miner' user). Override
       # them to match the host user if you mount a host path that must stay
       # owned by that user — e.g. an existing Monero blockchain.
-      - PUID=999
-      - PGID=999
-      # - VNC_AUTH_TOKEN=change-me  # Uncomment to require VNC password
-      # - MONERO_RPC_RESTRICTED=true  # Restrict RPC to view-only (default: true)
+      PUID: "${PUID:-999}"
+      PGID: "${PGID:-999}"
+      VNC_AUTH_TOKEN: "${VNC_AUTH_TOKEN:-}"
+      MONERO_RPC_RESTRICTED: "${MONERO_RPC_RESTRICTED:-true}"
+      SCREEN_RESOLUTION: "${SCREEN_RESOLUTION:-1920x1080x24}"
     volumes:
       - gupax-data:/home/miner/.local/share/gupax       # Gupax config + state + runtime binaries
       - ${MONERO_DATA_PATH:-gupax-monero}:/home/miner/.bitmonero  # Blockchain
@@ -47,7 +56,13 @@ services:
       resources:
         limits:
           cpus: '2.0'
-          memory: 4G
+          # Component footprints: XMRig's RandomX dataset is ~2.1 GB plus
+          # 256 MB/thread scratchpad (2 threads ~= 2.6 GB), monerod needs
+          # 1-1.5 GB during sync, and P2Pool + Xvfb + Gupax add ~0.5 GB.
+          # 4G leaves no headroom, so the stack can be OOM-killed as 137, which
+          # reads like a crash. This is an estimate from those footprints, not a
+          # measured peak: confirm with `docker stats` on a syncing node.
+          memory: 6G
         reservations:
           cpus: '1.0'
           memory: 1G

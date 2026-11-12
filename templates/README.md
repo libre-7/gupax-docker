@@ -4,7 +4,7 @@ This directory contains the Docker template XML file for installing **Gupax-dock
 
 The image is published to both:
 - **GitHub Container Registry**: [ghcr.io/libre-7/gupax-docker](https://github.com/libre-7/gupax-docker/pkgs/container/gupax-docker) — this is what the template pulls (`<Repository>`)
-- **Docker Hub**: [libre7/gupax-docker](https://hub.docker.com/r/libre7/gupax-docker) — identical image, published in the same CI run
+- **Docker Hub**: [libre7/gupax-docker](https://hub.docker.com/r/libre7/gupax-docker) — same digest, built once and pushed to both registries in the same job
 
 ## How to Use
 
@@ -44,7 +44,7 @@ If the template is not yet in the Community Applications store, you can install 
 The container runs a **noVNC web interface** — no X11 or VNC client needed:
 
 - Open your browser to: `http://<your-unraid-ip>:6080`
-- Click **Connect** on the noVNC page — no password required by default
+- Click **Connect** on the noVNC page — no password required by default (set `VNC_AUTH_TOKEN` to require one)
 - The Gupax GUI will appear in your browser
 
 ## Ports
@@ -52,11 +52,11 @@ The container runs a **noVNC web interface** — no X11 or VNC client needed:
 | Port | Service | Category | Map | Description |
 |---|---|---|---|---|
 | `6080` | noVNC | Access | ✅ **Yes** | Web UI — open in your browser |
-| `5900` | VNC | Access | ⚠️ **Optional** | Direct VNC (only needed if `VNC_AUTH_TOKEN` is set) |
+| `5900` | VNC | Access | ⚠️ **Optional** | Direct VNC — **empty by default** (not published). Only set it if `VNC_AUTH_TOKEN` is set; without a token x11vnc listens on loopback only |
 | `3333` | P2Pool | Mining | ✅ **Yes** | Stratum — external miners connect here |
 | `37889` | P2Pool | Mining | ✅ **Yes** | P2P — p2pool peer connections |
 | `18080` | monerod | Node | ✅ **Yes** | P2P network — connects to other Monero nodes |
-| `18081` | monerod | Node | ✅ **Yes** | RPC — JSON-RPC API for Gupax and wallets |
+| `18081` | monerod | Node | ⚠️ **Optional** | RPC — Gupax and P2Pool reach it over loopback inside the container. monerod binds `127.0.0.1` by default, so publishing the port does nothing unless you also pass `--rpc-bind-ip 0.0.0.0 --confirm-external-bind --restricted-rpc` |
 | `18083` | monerod | Node | — | ZMQ pub — block notifications for P2Pool (loopback only, `--zmq-pub` flag) |
 | `18084` | Tor HS | Tor | — | Hidden service virtual port (Tor routes this internally) |
 | `18086` | monerod | Tor | — | `--anonymous-inbound` bind target (Tor routes this internally) |
@@ -87,7 +87,7 @@ If you already have a Monero blockchain synced:
 
 ## Resource Limits
 
-The template sets recommended limits of **4GB RAM** and **2 CPU cores**. Adjust these in the template if needed.
+The template sets recommended limits of **6GB RAM** and **2 CPU cores**. 4GB leaves no headroom for XMRig's RandomX dataset (~2.1 GB) plus monerod during sync, and can produce OOM kills (exit 137). The 6GB figure is an estimate from the component footprints — measure with `docker stats` on your own node before tightening it.
 
 ## Submitting to Community Applications
 
@@ -96,3 +96,7 @@ To have this template included in the official Unraid Community Applications sto
 - [selfhosters/unRAID-CA-templates](https://github.com/selfhosters/unRAID-CA-templates)
 
 Include the template XML file and the repository URL in your PR.
+
+The maintainer profile for that submission is `ca_profile.xml` in the repository
+root. It is not part of the image build and is never copied into the container —
+it exists only to accompany the Community Applications PR.

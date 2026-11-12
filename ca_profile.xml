@@ -1,4 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!-- Maintainer profile for the Unraid Community Applications submission.
+     NOT used by the image build and never copied into the container. It is
+     staged here for the PR to selfhosters/unRAID-CA-templates described in
+     templates/README.md. Keep the Icon and Profile text in sync with
+     templates/gupax-docker.xml. -->
 <Maintainer>
   <Icon>https://raw.githubusercontent.com/libre-7/gupax-docker/main/icons/gupax.png</Icon>
   <Profile>

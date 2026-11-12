@@ -30,7 +30,6 @@ Exit codes:
     0  synced, or already identical (no-op)
     1  failure — the caller decides whether that is fatal
 """
-import base64
 import json
 import os
 import sys
@@ -71,10 +70,10 @@ def fetch_readme(token):
             raw = resp.read()
     except urllib.error.URLError as exc:
         die("could not fetch README", str(exc))
-    try:
-        return base64.b64decode(raw).decode("utf-8")
-    except Exception:  # already-decoded raw response
-        return raw.decode("utf-8")
+    # `application/vnd.github.v3.raw` returns plain text, not the base64 JSON
+    # envelope. Decode it directly; the previous base64 attempt only "worked"
+    # because it raised and fell through to this same path.
+    return raw.decode("utf-8")
 
 
 def login(username, token):
@@ -123,6 +122,17 @@ def patch_description(jwt, markdown):
         die("Docker Hub PATCH request failed", str(exc))
 
 
+def verify_description(jwt, expected):
+    """Read the description back and assert the write actually landed."""
+    stored = get_current(jwt).get("full_description") or ""
+    if stored.strip() != expected.strip():
+        die(
+            "read-back mismatch: Docker Hub did not store the description",
+            f"stored {len(stored)} chars, expected {len(expected)}",
+        )
+    print(f"Verified: Docker Hub now serves {len(stored)} chars of README")
+
+
 def main():
     username = os.environ.get("DOCKERHUB_USERNAME")
     token = os.environ.get("DOCKERHUB_TOKEN")
@@ -143,6 +153,11 @@ def main():
     )
     status = patch_description(jwt, markdown)
     print(f"Docker Hub description synced (HTTP {status}, {len(markdown)} chars)")
+
+    # A 2xx means Docker Hub accepted the request, not that it stored the value —
+    # this API silently ignores fields it does not model. Read it back and fail
+    # if the description did not take (#review M5).
+    verify_description(jwt, markdown)
     return 0
 
 

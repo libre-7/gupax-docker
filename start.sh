@@ -10,43 +10,96 @@
 set -e
 set -o pipefail
 
-# Cleanup function — stops all background processes gracefully
+# Stop one background process and wait for it.
+#
+# NEVER call a bare `wait` in teardown: with no operand it waits for *every*
+# child of this script, so a cleanup that runs before a PID variable is
+# assigned (a SIGTERM during startup, including the up-to-75s Tor bootstrap)
+# would block on a still-running service until Docker SIGKILLs the container
+# (#review H1).
+#
+#   $1 = PID (may be empty; then this is a no-op)
+#   $2 = optional user[:group] to signal as. CAP_KILL is dropped in the shipped
+#        capability profile, so root cannot signal Gupax (PUID) or Tor
+#        (debian-tor) directly — a same-UID signal needs no capability.
+stop_pid() {
+    local pid="${1:-}" run_as="${2:-}"
+    [ -n "$pid" ] || return 0
+    if [ -n "$run_as" ] && command -v gosu >/dev/null 2>&1; then
+        gosu "$run_as" kill "$pid" 2>/dev/null || kill "$pid" 2>/dev/null || true
+    else
+        kill "$pid" 2>/dev/null || true
+    fi
+    wait "$pid" 2>/dev/null || true
+}
+
+# Cleanup function — stops all background processes gracefully.
+#
+# Idempotent on purpose: the signal path and the normal exit path both call it,
+# and running teardown twice printed a duplicate shutdown sequence for no
+# benefit (#review M1).
+CLEANED=0
 cleanup() {
+    [ "$CLEANED" -eq 0 ] || return 0
+    CLEANED=1
+
     echo ""
     echo "[*] Shutting down..."
+
+    # Resolve the identity Gupax runs as, once. PUID/PGID can be unset if the
+    # signal arrives before start.sh assigned them.
+    local gupax_id=""
+    if [ -n "${PUID:-}" ] && [ -n "${PGID:-}" ] && [ "$PUID" != "0" ]; then
+        gupax_id="$PUID:$PGID"
+    fi
+
     echo "[*] Stopping Gupax..."
-    kill $GUPAX_PID 2>/dev/null || true
-    wait $GUPAX_PID 2>/dev/null || true
+    stop_pid "${GUPAX_PID:-}" "$gupax_id"
     echo "[*] Stopping xdg-desktop-portal..."
-    kill $PORTAL_PID 2>/dev/null || true
-    wait $PORTAL_PID 2>/dev/null || true
+    stop_pid "${PORTAL_PID:-}"
     echo "[*] Stopping D-Bus session..."
-    kill "$DBUS_SESSION_BUS_PID" 2>/dev/null || true
-    wait "$DBUS_SESSION_BUS_PID" 2>/dev/null || true
+    stop_pid "${DBUS_SESSION_BUS_PID:-}"
     echo "[*] Stopping websockify..."
-    kill $WEBSOCKIFY_PID 2>/dev/null || true
-    wait $WEBSOCKIFY_PID 2>/dev/null || true
+    stop_pid "${WEBSOCKIFY_PID:-}"
     echo "[*] Stopping x11vnc..."
-    kill $X11VNC_PID 2>/dev/null || true
-    wait $X11VNC_PID 2>/dev/null || true
+    stop_pid "${X11VNC_PID:-}"
     # Belt-and-suspenders: remove the password temp file on shutdown
     # in case it wasn't cleaned up during startup (e.g., container was killed
     # before the startup-time rm could execute).
-    [ -n "$X11VNC_PASSFILE" ] && rm -f "$X11VNC_PASSFILE"
+    if [ -n "${X11VNC_PASSFILE:-}" ]; then
+        rm -f "$X11VNC_PASSFILE"
+    fi
     echo "[*] Stopping openbox..."
-    kill $OPENBOX_PID 2>/dev/null || true
-    wait $OPENBOX_PID 2>/dev/null || true
+    stop_pid "${OPENBOX_PID:-}"
     echo "[*] Stopping Tor..."
-    kill $TOR_PID 2>/dev/null || true
-    wait $TOR_PID 2>/dev/null || true
+    stop_pid "${TOR_PID:-}" "${TOR_RUN_USER:-}"
     echo "[*] Stopping Xvfb..."
-    kill $XVFB_PID 2>/dev/null || true
-    wait $XVFB_PID 2>/dev/null || true
+    stop_pid "${XVFB_PID:-}"
     echo "[+] Shutdown complete"
 }
 
-# Register signal handlers for graceful shutdown
-trap cleanup SIGTERM SIGINT SIGQUIT
+# A requested stop is not a crash. Tear down once, then exit 0 so `docker stop`
+# and `docker compose down` are not recorded as 143 — a code that is
+# indistinguishable from a crash in `docker inspect` and in the logs (#review
+# M1). Gupax's own exit code still propagates on the normal path at the end of
+# this script.
+#
+# SC2329: only reachable through the trap handlers below, which ShellCheck
+# cannot see through because the command is a quoted string.
+# shellcheck disable=SC2329
+on_stop_signal() {
+    # A second signal while teardown is already running must not abort it: the
+    # re-entrant call would return from the CLEANED guard and then `exit 0`,
+    # cutting the outer teardown short and leaving services running.
+    [ "$CLEANED" -eq 0 ] || return 0
+    echo ""
+    echo "[*] Received SIG$1 — stopping"
+    cleanup
+    exit 0
+}
+trap 'on_stop_signal TERM' SIGTERM
+trap 'on_stop_signal INT' SIGINT
+trap 'on_stop_signal QUIT' SIGQUIT
 
 echo "============================================="
 echo "  Gupax-docker — Starting noVNC + Gupax"
@@ -56,14 +109,18 @@ echo "  noVNC:  http://localhost:6080"
 echo "  VNC:    localhost:5900"
 echo ""
 if [ "${TOR_ENABLED:-false}" = "true" ]; then
-    echo "  Tor:    ENABLED — tx-only mode (SOCKS5 127.0.0.1:9050)"
-    echo "  Note:   P2P sync stays on clearnet. Only transactions use Tor."
+    echo "  Tor:    daemon ENABLED (SOCKS5 127.0.0.1:9050)"
+    # Starting Tor and routing monerod through it are independent. Saying
+    # "tx-only mode" here made operators believe traffic was anonymised when
+    # monerod had no --tx-proxy (#GUP-14).
+    echo "  Note:   Tor does NOT route anything by itself. Start monerod with"
+    echo "          --tx-proxy=tor,127.0.0.1:9050 to send transactions through"
+    echo "          it. P2P sync stays on clearnet."
     if [ "${MONERO_RPC_RESTRICTED:-true}" = "true" ]; then
-        RPC_STATUS="restricted"
+        echo "  RPC:    recommended args include --restricted-rpc"
     else
-        RPC_STATUS="UNRESTRICTED ⚠️"
+        echo "  RPC:    recommended args are UNRESTRICTED (MONERO_RPC_RESTRICTED=false)"
     fi
-    echo "  RPC:    ${RPC_STATUS}"
 else
     echo "  Tor:    disabled (set TOR_ENABLED=true to enable)"
 fi
@@ -81,17 +138,33 @@ echo "[*] Fixing data directory permissions..."
 # volume stat succeeds and returns 0 — which would run the entire mining
 # stack as root via gosu 0:0. Treat a detected 0 as "unset" and fall back to
 # the image's miner user (useradd -r default) instead.
-_det_uid=$(stat -c '%u' /home/miner/.local/share/gupax 2>/dev/null || echo 999)
-_det_gid=$(stat -c '%g' /home/miner/.local/share/gupax 2>/dev/null || echo 999)
+# The image creates `miner` with `useradd -r`, so its UID is whatever the system
+# range allocates — do not assume 999. Resolve it once; keep 999 only as a
+# last-resort fallback for an image that has no `miner` account.
+MINER_UID=$(id -u miner 2>/dev/null || echo 999)
+MINER_GID=$(id -g miner 2>/dev/null || echo 999)
+
+_det_uid=$(stat -c '%u' /home/miner/.local/share/gupax 2>/dev/null || echo "$MINER_UID")
+_det_gid=$(stat -c '%g' /home/miner/.local/share/gupax 2>/dev/null || echo "$MINER_GID")
 if [ "$_det_uid" = "0" ]; then
-    echo "[!] Data volume is root-owned (fresh Docker volume) — defaulting PUID to 999"
-    _det_uid=999
+    echo "[!] Data volume is root-owned (fresh Docker volume) — defaulting PUID to $MINER_UID (miner)"
+    _det_uid=$MINER_UID
 fi
 if [ "$_det_gid" = "0" ]; then
-    _det_gid=999
+    _det_gid=$MINER_GID
 fi
 PUID=${PUID:-$_det_uid}
 PGID=${PGID:-$_det_gid}
+
+# Resolve/create the runtime principal before anything needs it. The gupax
+# group is created here unconditionally — the previous inline block only ran
+# when the UID was absent, so the default 999 path (miner) never created it
+# (#GUP-01). The script also validates that both IDs are numeric and non-root.
+if ! /usr/local/bin/setup-runtime-user.sh; then
+    echo "[ERROR] Failed to prepare the runtime user — refusing to start."
+    echo "        PUID/PGID must be numeric, non-root, and creatable in this image."
+    exit 1
+fi
 
 # Pre-create Gupax binary subdirectories on the persistent volume and symlink
 # them into /usr/local/bin/gupax/ so Gupax downloads binaries to the volume,
@@ -108,11 +181,11 @@ FS_TYPE=$(stat -f -c '%T' /home/miner/.local/share/gupax 2>/dev/null || echo "un
 chmod a+rx /home/miner /home/miner/.local /home/miner/.local/share 2>/dev/null || true
 
 if [ "$FS_TYPE" = "fuse.shfs" ] || [ "$FS_TYPE" = "fuseblk" ]; then
-    # Unraid FUSE: chown is silently ignored, so we resort to world-writable
-    # permissions.  This is the only way to make the volume usable when the
-    # gosu-dropped UID (e.g. 99) doesn't own the backing files.
-    echo "[*] Detected FUSE filesystem ($FS_TYPE) — applying relaxed permissions"
-    chmod -R a+rwX /home/miner/.local/share/gupax 2>/dev/null || true
+    # Unraid FUSE: chown is silently ignored, so try group ownership first. The
+    # shared probe below decides whether that actually worked.
+    echo "[*] Detected FUSE filesystem ($FS_TYPE) — trying group-based permissions"
+    chgrp -R gupax /home/miner/.local/share/gupax 2>/dev/null || true
+    chmod -R g+rwX,o-rwx /home/miner/.local/share/gupax 2>/dev/null || true
     chmod a+rwX /home/miner/.bitmonero 2>/dev/null || true
 else
     # Normal filesystem: chown actually works.
@@ -123,6 +196,62 @@ else
     chmod -R u+rwX,go+rX /home/miner/.local/share/gupax 2>/dev/null || true
     chown "$PUID:$PGID" /home/miner/.bitmonero 2>/dev/null || true
     chmod u+rwX,go+rX /home/miner/.bitmonero 2>/dev/null || true
+fi
+
+# Verify whichever strategy ran above, on every directory Gupax actually writes.
+#
+# Two things made the old root-only probe dangerous:
+#   * gosu sets only the primary GID and drops supplementary groups (verified
+#     against the shipped gosu), so the Gupax process never carries the `gupax`
+#     group. `chgrp gupax` therefore grants it nothing, and the `o-rwx` above
+#     actively removes the access it would otherwise have had.
+#   * this script creates p2pool/node/xmrig/xmrig-proxy as root at every start.
+#     The volume root can already be PUID-owned from earlier runs, so a root-only
+#     probe passes while a freshly created subdirectory is unreachable. Gupax
+#     then aborts at startup with
+#       "Gupax P2Pool Stats: Permission denied (os error 13)"
+#     and skips init_auto().
+_denied=""
+for _d in "" /p2pool /node /xmrig /xmrig-proxy; do
+    gosu "$PUID:$PGID" test -w "/home/miner/.local/share/gupax$_d" 2>/dev/null \
+        || _denied="/home/miner/.local/share/gupax$_d"
+done
+if [ -n "$_denied" ]; then
+    echo "[!] WARNING: UID:$PUID cannot write $_denied"
+    echo "    gosu drops supplementary groups, so the gupax group cannot help here."
+    echo "    Falling back to world-writable volume permissions. Binaries are"
+    echo "    never executed as root, so this is data tampering, not privesc."
+    chmod -R a+rwX /home/miner/.local/share/gupax 2>/dev/null || true
+fi
+
+# Runtime directories Gupax and the portal expect, which the image does not
+# create. Both failures are visible in the log but harmless to correctness, so
+# they are best-effort: if a directory cannot be made, startup continues exactly
+# as it did before.
+#
+#   ~/.cache — wgpu writes its shader cache there. `useradd -m` creates
+#   /home/miner as 0750 owned by miner, and the chmod above widens it to 0755:
+#   traversable, not writable. When PUID is not the image's `miner` account (the
+#   normal Unraid 99:100 case) Gupax cannot create it and logs
+#     "Failed to create /home/miner/.cache for shader cache (Permission denied)".
+#
+#   XDG_RUNTIME_DIR — required by GTK/zbus/portal clients; the spec wants it mode
+#   0700 owned by the user. Without it Gupax logs
+#     "error: XDG_RUNTIME_DIR is not set in the environment".
+#   Root still reaches a 0700 directory through DAC_OVERRIDE, which the shipped
+#   capability profile includes.
+GUPAX_CACHE_DIR=/home/miner/.cache
+if mkdir -p "$GUPAX_CACHE_DIR" 2>/dev/null; then
+    chown "$PUID:$PGID" "$GUPAX_CACHE_DIR" 2>/dev/null || true
+    chmod u+rwX,go-rwx "$GUPAX_CACHE_DIR" 2>/dev/null || true
+    export XDG_CACHE_HOME="$GUPAX_CACHE_DIR"
+fi
+
+XDG_RUNTIME_DIR="/tmp/runtime-${PUID}"
+if mkdir -p "$XDG_RUNTIME_DIR" 2>/dev/null; then
+    chown "$PUID:$PGID" "$XDG_RUNTIME_DIR" 2>/dev/null || true
+    chmod 700 "$XDG_RUNTIME_DIR" 2>/dev/null || true
+    export XDG_RUNTIME_DIR
 fi
 
 # Display number for Xvfb
@@ -145,18 +274,57 @@ if [ "${TOR_ENABLED:-false}" = "true" ]; then
 
     # Prepare Tor directories with restrictive permissions (required for HS)
     mkdir -p /home/miner/.tor
-    chown root:root /home/miner/.tor
     chmod 700 /home/miner/.tor
 
-    # Generate minimal torrc: SOCKS5 outbound proxy + hidden service for monerod
-    # Single .onion exposes both P2P (18084) and RPC (18081) on different ports
-    cat > /home/miner/.tor/torrc <<'TORRC'
+    # Run Tor unprivileged when the volume permits (#GUP-13). The packaged
+    # torrc's default `User debian-tor` does not apply to our generated file.
+    TOR_RUN_USER=""
+    if getent passwd debian-tor >/dev/null 2>&1; then
+        chown -R debian-tor:debian-tor /home/miner/.tor 2>/dev/null || true
+        if gosu debian-tor test -w /home/miner/.tor 2>/dev/null; then
+            TOR_RUN_USER="debian-tor"
+        fi
+    fi
+    if [ -n "$TOR_RUN_USER" ]; then
+        TOR_USER_LINE="User $TOR_RUN_USER"
+        echo "[+] Tor will run as $TOR_RUN_USER"
+    else
+        chown root:root /home/miner/.tor 2>/dev/null || true
+        TOR_USER_LINE=""
+        echo "[!] WARNING: .tor is not writable by debian-tor (FUSE?) — Tor will run as root"
+    fi
+
+    # Wallet RPC over the hidden service is opt-in (#GUP-04). monerod's RPC is
+    # unauthenticated and unrestricted unless the operator pasted
+    # --restricted-rpc, and the container cannot enforce that. Publishing the
+    # port by default handed anyone with the .onion admin RPC.
+    HS_RPC_LINE=""
+    if [ "${TOR_EXPOSE_RPC:-false}" = "true" ]; then
+        HS_RPC_LINE="HiddenServicePort 18081 127.0.0.1:18081"
+        echo "[!] TOR_EXPOSE_RPC=true — wallet RPC will be reachable over the .onion."
+        if [ "${MONERO_RPC_RESTRICTED:-true}" != "true" ]; then
+            echo "[!] WARNING: MONERO_RPC_RESTRICTED is not true. That exposes"
+            echo "    UNAUTHENTICATED admin RPC (stop daemon, ban peers) to anyone"
+            echo "    who learns the .onion address."
+        fi
+    else
+        echo "[*] Wallet RPC over Tor: disabled (set TOR_EXPOSE_RPC=true to publish 18081)"
+    fi
+
+    # Generate minimal torrc: SOCKS5 outbound proxy + hidden service for monerod.
+    # ControlPort + cookie auth let the healthcheck assert real bootstrap
+    # (PROGRESS=100), not just a listening socket (#GUP-06).
+    cat > /home/miner/.tor/torrc <<TORRC
 SocksPort 127.0.0.1:9050
+ControlPort 127.0.0.1:9051
+CookieAuthentication 1
+CookieAuthFile /home/miner/.tor/control_auth_cookie
 DataDirectory /home/miner/.tor
 PidFile /home/miner/.tor/tor.pid
+${TOR_USER_LINE}
 HiddenServiceDir /home/miner/.tor/hs_monerod
 HiddenServicePort 18084 127.0.0.1:18086
-HiddenServicePort 18081 127.0.0.1:18081
+${HS_RPC_LINE}
 TORRC
     chmod 600 /home/miner/.tor/torrc
 
@@ -195,15 +363,19 @@ TORRC
 
     if [ -n "$HS_HOSTNAME" ]; then
         echo "[+] Monero .onion: ${HS_HOSTNAME}"
-        echo "    │ Wallet RPC:   ${HS_HOSTNAME}:18081"
         echo "    │ P2P inbound:  ${HS_HOSTNAME}:18084"
-        echo "    │"
-        echo "    │ Connect wallets over Tor:"
-        echo "    │   monero-wallet-cli --proxy 127.0.0.1:9050 \\"
-        echo "    │     --daemon-address ${HS_HOSTNAME}:18081 \\"
-        echo "    │     --trusted-daemon"
-        echo "    │"
-        echo "    │ Mobile wallets (Cake, Monerujo): add .onion as remote node."
+        if [ -n "$HS_RPC_LINE" ]; then
+            echo "    │ Wallet RPC:   ${HS_HOSTNAME}:18081"
+            echo "    │"
+            echo "    │ Connect wallets over Tor:"
+            echo "    │   monero-wallet-cli --proxy 127.0.0.1:9050 \\"
+            echo "    │     --daemon-address ${HS_HOSTNAME}:18081 \\"
+            echo "    │     --trusted-daemon"
+            echo "    │"
+            echo "    │ Mobile wallets (Cake, Monerujo): add .onion as remote node."
+        else
+            echo "    │ Wallet RPC:   not published (TOR_EXPOSE_RPC=false)"
+        fi
         # This claim must be gated: it was previously printed unconditionally,
         # so setting MONERO_RPC_RESTRICTED=false still told the operator "RPC
         # is restricted" while the args block below omitted --restricted-rpc.
@@ -231,9 +403,14 @@ TORRC
         # Persist for reference across container restarts
         echo "Monero .onion: ${HS_HOSTNAME}" > /home/miner/.tor/monerod_onion.txt
         {
-            echo ""
-            echo "Wallet RPC — connect wallets via Tor:"
-            echo "  ${HS_HOSTNAME}:18081"
+            if [ -n "$HS_RPC_LINE" ]; then
+                echo ""
+                echo "Wallet RPC — connect wallets via Tor:"
+                echo "  ${HS_HOSTNAME}:18081"
+            else
+                echo ""
+                echo "Wallet RPC over Tor: disabled (TOR_EXPOSE_RPC=false)"
+            fi
             echo ""
             echo "Monerod arguments (Gupax → Node → Arguments):"
         } >> /home/miner/.tor/monerod_onion.txt
@@ -299,15 +476,28 @@ echo "[*] Starting x11vnc on port 5900..."
 # Uses -passwdfile instead of -passwd to avoid exposing the password in
 # /proc/PID/cmdline and to handle passwords with spaces or special characters.
 if [ -n "$VNC_AUTH_TOKEN" ]; then
+    # RFB VNC authentication uses a fixed 8-byte DES key: x11vnc silently
+    # truncates longer values. Say so instead of implying the full token is
+    # in effect (#GUP-20).
+    if [ "${#VNC_AUTH_TOKEN}" -gt 8 ]; then
+        echo "[!] WARNING: VNC_AUTH_TOKEN is ${#VNC_AUTH_TOKEN} characters, but VNC"
+        echo "    authentication uses only the first 8. Choose a short passphrase or"
+        echo "    put a real authenticating proxy in front of noVNC."
+    fi
     X11VNC_PASSFILE=$(mktemp)
     printf '%s' "$VNC_AUTH_TOKEN" > "$X11VNC_PASSFILE"
     echo "[*] VNC authentication: enabled (VNC_AUTH_TOKEN is set)"
     x11vnc -display $DISPLAY_NUM -forever -shared -rfbport 5900 \
         -passwdfile "$X11VNC_PASSFILE" -noxfixes -cursor arrow &
 else
-    echo "[*] VNC authentication: DISABLED (set VNC_AUTH_TOKEN to enable)"
+    # No password: bind x11vnc to loopback only. noVNC still works (websockify
+    # proxies over localhost), but publishing 5900 can no longer expose an
+    # unauthenticated desktop — Docker's DNAT targets the container IP, not
+    # loopback (#GUP-03).
+    echo "[*] VNC authentication: DISABLED — x11vnc bound to loopback only."
+    echo "    Set VNC_AUTH_TOKEN before publishing port 5900."
     x11vnc -display $DISPLAY_NUM -forever -shared -rfbport 5900 \
-        -nopw -noxfixes -cursor arrow &
+        -nopw -localhost -noxfixes -cursor arrow &
 fi
 X11VNC_PID=$!
 # x11vnc runs asynchronously (& above) — give it time to read the
@@ -334,19 +524,22 @@ echo "[+] x11vnc started on port 5900"
 
 # Start noVNC
 echo "[*] Starting noVNC on port 6080..."
-websockify --web /usr/share/novnc 6080 localhost:5900 &
+websockify --web /usr/share/novnc 6080 127.0.0.1:5900 &
 WEBSOCKIFY_PID=$!
 
 # Re-enable X autorepeat after noVNC connects (x11vnc disables it on client connect)
 sleep 2
 xset r on 2>/dev/null || true
 
-# Debug: show X keyboard state
-echo "[D] Keyboard repeat setting:"
-xset q 2>/dev/null | grep -A2 "Keyboard" || echo "[D] xset q failed"
-
-echo "[D] X input devices:"
-xinput list 2>/dev/null || echo "[D] xinput failed"
+# Optional diagnostics for input problems (keyboard ignored, wrong focus).
+# Off by default so the normal startup log stays short; enable with
+# GUPAX_DEBUG=true when troubleshooting.
+if [ "${GUPAX_DEBUG:-false}" = "true" ]; then
+    echo "[D] Keyboard repeat setting:"
+    xset q 2>/dev/null | grep -A2 "Keyboard" || echo "[D] xset q failed"
+    echo "[D] X input devices:"
+    xinput list 2>/dev/null || echo "[D] xinput failed"
+fi
 
 # Verify websockify is running
 if ! kill -0 $WEBSOCKIFY_PID 2>/dev/null; then
@@ -378,43 +571,30 @@ echo "[+] xdg-desktop-portal started (PID $PORTAL_PID)"
 # Start Gupax — runs as child of this script so cleanup() can manage it
 echo "[*] Starting Gupax..."
 
-# PUID/PGID were already detected (or overridden by env vars) during the
-# permission-fix block above — no need to rediscover them.
+# The runtime user (and its gupax group membership) was resolved at the top of
+# this script by setup-runtime-user.sh — before any file permissions were
+# applied. Do not recreate it here.
 #
-# sudo requires the current UID to exist in both /etc/passwd and /etc/shadow.
-# A raw 'echo' into passwd has no corresponding shadow entry, so sudo fails:
-# "account validation failure, is your account locked?"
-# useradd creates both entries properly and accepts the NOPASSWD sudoers rule.
-#
-# The Dockerfile sudoers rule uses %gupax (group-based).  On many systems
-# (Unraid especially) PUID=99/PGID=100 maps to nobody:users / nobody:nogroup,
-# so group GID 100 already belongs to a system group.  groupadd -f will
-# silently skip the conflicting GID and assign a different numeric ID,
-# meaning the new user is NOT a member of the gupax group and sudoers never
-# matches.  To fix this we unconditionally add the user to gupax as a
-# supplementary group after creation.
-if ! getent passwd "$PUID" >/dev/null 2>&1; then
-    groupadd -f gupax
-    useradd -o -M -u "$PUID" -g "$PGID" -d /home/miner -s /bin/bash gupax 2>/dev/null || {
-        # Fallback: useradd failed (e.g., read-only rootfs, no shadow).  At minimum get the
-        # user into passwd so the container doesn't crash; XMRig may still fail but won't
-        # bring down Gupax itself.
-        echo "gupax:x:$PUID:$PGID:Docker user:/home/miner:/bin/bash" >> /etc/passwd
-        echo "[!] useradd failed — fallback to /etc/passwd only (XMRig may not start)"
-    }
-    usermod -a -G gupax gupax 2>/dev/null || true
-    echo "[*] Created gupax user (UID $PUID) for pkexec→sudo support"
+# gosu must work. The previous fallback started Gupax, monerod, P2Pool and
+# XMRig as the entrypoint's UID (0) whenever the probe failed for ANY reason —
+# a bad env var, a restricted setgroups, a read-only /etc — while logging it as
+# "rootless Docker". Failing closed is the only way the non-root guarantee is
+# actually a guarantee (#GUP-05).
+if ! command -v gosu >/dev/null 2>&1; then
+    echo "[ERROR] gosu is missing from the image — cannot drop privileges."
+    exit 1
+fi
+if ! gosu "$PUID:$PGID" true 2>/dev/null; then
+    echo "[ERROR] Cannot switch to UID:$PUID GID:$PGID via gosu."
+    echo "        Check that PUID/PGID are numeric, exist (or were created), and"
+    echo "        that this container is allowed to call setgroups/setuid."
+    echo "        Refusing to run the mining stack as root."
+    exit 1
 fi
 
-if command -v gosu >/dev/null 2>&1 && gosu "$PUID:$PGID" true 2>/dev/null; then
-    echo "[*] Running Gupax as UID:$PUID GID:$PGID"
-    gosu "$PUID:$PGID" env HOME=/home/miner /usr/local/bin/gupax/gupax &
-    GUPAX_PID=$!
-else
-    echo "[*] gosu unavailable — running as current user (rootless Docker?)"
-    HOME=/home/miner /usr/local/bin/gupax/gupax &
-    GUPAX_PID=$!
-fi
+echo "[*] Running Gupax as UID:$PUID GID:$PGID"
+gosu "$PUID:$PGID" env HOME=/home/miner /usr/local/bin/gupax/gupax &
+GUPAX_PID=$!
 echo "[+] Gupax started (PID $GUPAX_PID)"
 
 # Wait specifically for Gupax — other services dying should NOT kill the container.
@@ -428,6 +608,9 @@ wait $GUPAX_PID
 EXIT_CODE=$?
 set -e
 
+# Reached only when Gupax exited on its own (crash, or Quit from the GUI). A
+# requested stop exits from the signal handler above and never gets here, so
+# this path is the one that reports a real exit code.
 echo ""
 echo "[*] Gupax exited (code: $EXIT_CODE)"
 cleanup

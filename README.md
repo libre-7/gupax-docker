@@ -1,7 +1,6 @@
 <img src="https://raw.githubusercontent.com/gupax-io/gupax/main/assets/images/banner.png" width="600">
 
 [![Build Status](https://img.shields.io/github/actions/workflow/status/libre-7/gupax-docker/docker-publish.yml?branch=main&style=flat-square&logo=github&label=build)](https://github.com/libre-7/gupax-docker/actions)
-[![Docker Hub Build](https://img.shields.io/github/actions/workflow/status/libre-7/gupax-docker/docker-hub-push.yml?branch=main&style=flat-square&logo=docker&label=dockerhub)](https://github.com/libre-7/gupax-docker/actions/workflows/docker-hub-push.yml)
 [![License](https://img.shields.io/github/license/libre-7/gupax-docker?style=flat-square&color=blue)](https://github.com/libre-7/gupax-docker/blob/main/LICENSE)
 [![Docker Hub](https://img.shields.io/docker/pulls/libre7/gupax-docker?style=flat-square&color=blue&logo=docker)](https://hub.docker.com/r/libre7/gupax-docker)
 [![Image Size](https://img.shields.io/docker/image-size/libre7/gupax-docker/latest?style=flat-square&logo=docker&color=blueviolet)](https://hub.docker.com/r/libre7/gupax-docker)
@@ -20,7 +19,7 @@
 | 🖥️ Gupax GUI | Full graphical interface for P2Pool + XMRig mining |
 | 🔗 Decentralized mining | P2Pool provides trustless, decentralized Monero mining |
 | 💾 Persistent config | Gupax settings persist across container restarts |
-| 🔄 Auto-restart | Container restarts automatically on failure |
+| 🔄 Restart on exit | `restart: unless-stopped` restarts the container when Gupax **exits**. A hung GUI (container `Up`, health `unhealthy`) is reported by the health check, not auto-restarted |
 | 📊 Mining dashboard | Real-time hashrate, shares, payouts, and node status |
 | 🔧 XMRig proxy | Built-in proxy for connecting external miners |
 | 🧅 Tor hidden service | Optional — expose your node as a `.onion` for private transactions |
@@ -56,9 +55,16 @@ open http://localhost:6080
 ```
 
 ```bash
-# Pull and run
+# Pull and run — mirrors docker-compose.yml: capability drop, init/reaper,
+# 30s stop grace period, and the gupax-tor volume for a persistent .onion.
 docker run -d \
   --name gupax \
+  --init \
+  --restart unless-stopped \
+  --stop-timeout 30 \
+  --cap-drop=ALL \
+  --cap-add=SETUID --cap-add=SETGID --cap-add=DAC_OVERRIDE \
+  --cap-add=FOWNER --cap-add=CHOWN \
   -p 6080:6080 \
   -p 3333:3333 \
   -p 37889:37889 \
@@ -66,11 +72,19 @@ docker run -d \
   -p 18081:18081 \
   -v gupax-data:/home/miner/.local/share/gupax \
   -v gupax-monero:/home/miner/.bitmonero \
+  -v gupax-tor:/home/miner/.tor \
+  -e TOR_ENABLED=false \
+  -e PUID=999 \
+  -e PGID=999 \
   libre7/gupax-docker:latest
 
 # Open browser
 open http://localhost:6080
 ```
+
+> **Warning:** the `docker run` form does not read `.env`. Pass configuration
+> with `-e` (for example `-e VNC_AUTH_TOKEN=...`), or use Compose, which
+> interpolates every variable from `.env`.
 
 Click **Connect** on the noVNC page — no password required by default.
 
@@ -96,7 +110,12 @@ See the [Ports table](#ports) in Configuration for all Tor-related ports (`18081
 > (`tor,socks5://127.0.0.1:9050`); it is unnecessary here, since Tor's SocksPort
 > accepts the SOCKS4a CONNECT that the plain form produces.
 
-The container uses **tx-only mode** — P2P blockchain sync stays on clearnet; only wallet-originated transactions are routed through Tor. This keeps bandwidth through Tor negligible (~2 KB per transaction) while still protecting transaction privacy.
+The container runs in **tx-only** mode **when monerod is started with the recommended `--tx-proxy` argument below**: P2P blockchain sync stays on clearnet, and only wallet-originated transactions are routed through Tor. This keeps bandwidth through Tor negligible (~2 KB per transaction) while still protecting transaction privacy.
+
+> **`TOR_ENABLED=true` starts the daemon; it does not route anything by itself.**
+> Transaction privacy depends on monerod's `--tx-proxy=tor,127.0.0.1:9050`
+> argument. Without it, monerod broadcasts on clearnet even though Tor is
+> running.
 
 ### Why not sync blocks over Tor?
 
@@ -153,17 +172,30 @@ You'll see output like:
 
 > **Why this matters:** Every time you click "Reset to Advanced options" or switch between Simple/Advanced modes, Gupax resets `--data-dir` back to `.bitmonero`. If left as the relative path, monerod will fail to find the blockchain and exit immediately. You must manually correct this each time the options are reset.
 
-**5. Paste the four Tor arguments** from the log output (after the `--data-dir` fix):
+**5. Paste the three Tor arguments** from the log output (after the `--data-dir` fix):
 
 ```
 --restricted-rpc --tx-proxy=tor,127.0.0.1:9050 --anonymous-inbound=dqwj5fyc...onion:18084,127.0.0.1:18086,40
 ```
 
-The complete Start options line should look like this. **Do not add `--enable-dns-blocklist` when Tor is enabled** — it resolves seed-node DNS over clearnet via `libunbound`, not through the Tor SOCKS proxy, which leaks exactly the kind of metadata this setup exists to hide (see [#14](https://github.com/libre-7/gupax-docker/issues/14)):
+The complete Start options line should look like this. **Do not add `--enable-dns-blocklist` when Tor is enabled** — it makes monerod fetch TXT records from `blocklist.moneropulse.*` through the system resolver (`libunbound` reading `/etc/resolv.conf`), not through the Tor SOCKS proxy, which leaks exactly the kind of metadata this setup exists to hide (see [#14](https://github.com/libre-7/gupax-docker/issues/14)):
 
 ```
 --data-dir /home/miner/.bitmonero --zmq-pub tcp://127.0.0.1:18083 --rpc-bind-ip 127.0.0.1 --rpc-bind-port 18081 --out-peers 8 --in-peers 16 --log-level 0 --sync-pruned-blocks --prune-blockchain --restricted-rpc --tx-proxy=tor,127.0.0.1:9050 --anonymous-inbound=dqwj5fyc...onion:18084,127.0.0.1:18086,40
 ```
+
+> **The DNS blocklist is also a toggle.** Gupax exposes the same flag as a
+> **DNS blocklist** switch on the Node tab. Leave it **off** while Tor is
+> enabled — the container cannot switch it off for you, and its TXT lookups go
+> over clearnet DNS (see [#14](https://github.com/libre-7/gupax-docker/issues/14)).
+>
+> **Turning it off does not make monerod's DNS private.** `--tx-proxy` only
+> proxies transactions; monerod still resolves its DNS **seed nodes** over
+> clearnet. Only a full `--proxy 127.0.0.1:9050` makes monerod disable both the
+> seed lookups and the blocklist (`--proxy-allow-dns-leaks` overrides that), and
+> that routes all P2P through Tor, which this project argues against for
+> bandwidth reasons. Treat "DNS is private" and "transactions are private" as
+> separate properties.
 
 **6. Click Save** (Gupax does not auto-save — if you skip this, the arguments are lost on restart)
 
@@ -187,7 +219,15 @@ Mount the `gupax-tor` volume (enabled by default in `docker-compose.yml`) to per
 
 ### Connecting a Wallet via Tor
 
-Once monerod is running, you can connect any Monero wallet through the same `.onion` address over the wallet RPC port (`18081`).
+> **Prerequisite:** wallet RPC is **not** published on the hidden service by
+> default (`TOR_EXPOSE_RPC=false`). The P2P inbound port `18084` is always
+> published, but `18081` is not — because monerod's RPC is unauthenticated
+> unless you paste `--restricted-rpc`, and the container cannot enforce it.
+> To opt in, set `TOR_EXPOSE_RPC=true`, restart the container, and make sure
+> monerod runs with `--restricted-rpc`. When `MONERO_RPC_RESTRICTED=false`,
+> startup prints an explicit warning that admin RPC would be public.
+
+Once monerod is running and `TOR_EXPOSE_RPC=true`, you can connect any Monero wallet through the same `.onion` address over the wallet RPC port (`18081`).
 
 **With a Monero wallet:**
 1. Go to wallet settings / nodes
@@ -258,7 +298,7 @@ Inside the Gupax GUI:
 
 ### Ports on Unraid
 
-See the [Ports table](#ports) in Configuration for a complete list. The Unraid template maps `6080`, `3333`, `37889`, `18080`, and `18081` by default. Port `5900` (VNC) is available but disabled by default — only enable it if you have set `VNC_AUTH_TOKEN`.
+See the [Ports table](#ports) in Configuration for a complete list. The Unraid template maps `6080`, `3333`, `37889`, `18080`, and `18081` by default. Port `5900` (VNC) is **not published by default** — leave the field empty unless you have set `VNC_AUTH_TOKEN`. Without a token, x11vnc binds to loopback only, so publishing the port would not expose an unauthenticated desktop anyway.
 
 ### Using Your Own Blockchain on Unraid
 
@@ -279,26 +319,27 @@ If you have an existing Monero blockchain on your Unraid server:
 
 | Variable | Required | Default | Description |
 |---|---|---|---|
-| `TOR_ENABLED` | No | `false` | Enable Tor daemon with SOCKS5 proxy + hidden service for monerod |
-| `VNC_AUTH_TOKEN` | No | *(none)* | Set to require a password on the noVNC/VNC interface |
-| `PUID` | No | *(auto)* | UID to run Gupax as — auto-detected from `gupax-data` volume owner |
-| `PGID` | No | *(auto)* | GID to run Gupax as — auto-detected from `gupax-data` volume owner |
+| `TOR_ENABLED` | No | `false` | Start the Tor daemon (SOCKS5 + hidden service). Nothing is routed until monerod uses `--tx-proxy=tor,127.0.0.1:9050` |
+| `TOR_EXPOSE_RPC` | No | `false` | Publish wallet RPC (`18081`) on the `.onion`. Off by default; enable only with `--restricted-rpc` |
+| `VNC_AUTH_TOKEN` | No | *(none)* | Password for VNC/noVNC. **Only the first 8 characters are effective** (VNC protocol limit); leave empty to bind x11vnc to loopback |
+| `PUID` | No | `999` | UID to run Gupax as. `docker-compose.yml` defaults it to `999`; when unset entirely, it is auto-detected from the `gupax-data` volume owner (fresh root-owned volume → `999`) |
+| `PGID` | No | `999` | GID to run Gupax as — same resolution as `PUID` |
 | `MONERO_RPC_RESTRICTED` | No | `true` | Adds `--restricted-rpc` to the **recommended** monerod arguments printed at startup — you still paste them into Gupax → Node → Arguments and Save |
 | `MONERO_DATA_PATH` | No | `gupax-monero` | Path (volume name or host path) for Monero blockchain data |
 | `SCREEN_RESOLUTION` | No | `1920x1080x24` | Resolution for the virtual X display (WxHxD format) |
 
-> **Note:** `GUPAX_VERSION` is managed automatically by the CI workflow — no manual configuration needed. The image is built with the newest **semver-tagged** (`v*.*.*`, non-prerelease) upstream Gupax release that ships a Linux x64 tarball. If upstream publishes a newer build under a non-semver tag, it is skipped; the container's own startup log prints the detected version and asset.
+> **Note:** `GUPAX_VERSION` is managed automatically by the CI workflow — no manual configuration needed. The image is built with the newest **semver-tagged** (`v*.*.*`, non-prerelease) upstream Gupax release that ships a Linux x64 tarball. If upstream publishes a newer release under a non-semver tag, the build keeps the semver release but CI emits a `Upstream release skipped` warning naming the skipped tag. The resolved tag and asset, and whether its SHA256 is pinned in `gupax-checksums.txt`, are printed in the workflow log.
 
 ### Ports
 
 | Port | Service | Category | Map | Description |
 |---|---|---|---|---|
 | `6080` | noVNC | Access | ✅ **Yes** | Web UI — open in your browser |
-| `5900` | VNC | Access | ⚠️ **Optional** | Direct VNC (only needed if `VNC_AUTH_TOKEN` is set) |
+| `5900` | VNC | Access | ⚠️ **Optional** | Direct VNC — **empty by default** (not published). Only set it if `VNC_AUTH_TOKEN` is set; without a token x11vnc listens on loopback only |
 | `3333` | P2Pool | Mining | ✅ **Yes** | Stratum — external miners connect here |
 | `37889` | P2Pool | Mining | ✅ **Yes** | P2P — p2pool peer connections |
 | `18080` | monerod | Node | ✅ **Yes** | P2P network — connects to other Monero nodes |
-| `18081` | monerod | Node | ✅ **Yes** | RPC — JSON-RPC API for Gupax and wallets |
+| `18081` | monerod | Node | ⚠️ **Optional** | RPC — Gupax and P2Pool reach it over loopback inside the container. monerod binds `127.0.0.1` by default, so publishing the port does nothing unless you also pass `--rpc-bind-ip 0.0.0.0 --confirm-external-bind --restricted-rpc` |
 | `18083` | monerod | Node | — | ZMQ pub — block notifications for P2Pool (loopback only, `--zmq-pub` flag) |
 | `18084` | Tor HS | Tor | — | Hidden service virtual port (Tor routes this internally) |
 | `18086` | monerod | Tor | — | `--anonymous-inbound` bind target (Tor routes this internally) |
@@ -389,27 +430,33 @@ chown -R 99:100 /path/to/your/blockchain
 
 ## 🔐 Security Notes
 
-- The noVNC interface has **no password by default** — set `VNC_AUTH_TOKEN` to enable authentication
+- The noVNC interface has **no password by default** — set `VNC_AUTH_TOKEN` to enable authentication. Without a token, x11vnc binds to loopback only, so port 5900 cannot be used to reach the desktop even if published; noVNC on 6080 still works.
 - Only expose port 6080 to trusted networks
 - For production use, consider adding authentication at the network level
+- **XMRig runs unprivileged.** The image no longer grants passwordless root execution of the runtime-downloaded XMRig binary. That binary lives on a writable volume, so root execution would let anything able to write the volume run code as container root. The trade-off is that XMRig's MSR optimisation is unavailable; hugepages and normal mining still work. See `SECURITY.md`.
+- **The miner binaries Gupax downloads at runtime are not verified by this image.** TLS protects them in transit, but no hash or signature is checked before they execute. They run as the unprivileged runtime user, so this is an integrity risk rather than a privilege boundary. See [SECURITY.md → Runtime-downloaded miner binaries](SECURITY.md#runtime-downloaded-miner-binaries-not-verified-by-this-image) for the trust model and a verification recipe.
 
 ### Unraid FUSE Filesystems (Important)
 
 Unraid uses FUSE (fuse.shfs) for its `appdata` shares, which silently ignores
-`chown`. The container detects this at startup and applies **world-writable**
-permissions (`chmod a+rwX`) on the Gupax data volume so the container can
-write files regardless of the host user ID.
+`chown`. The container detects this at startup and first tries **group-based**
+permissions (`chgrp gupax`, `chmod g+rwX,o-rwx`). Only if the mount ignores
+group ownership too does it fall back to **world-writable** permissions
+(`chmod a+rwX`) on the Gupax data volume — the only remaining way to let the
+runtime UID write there.
 
 **What this means:** Any process on your Unraid host — or any other
 container — can read and write files in `/mnt/user/appdata/gupax/`.
 This includes:
 
-- **Mining binaries** (P2Pool, XMRig, monerod) — could be replaced with a
-  trojaned version by a compromised container
+- **Mining binaries** (P2Pool, XMRig, monerod) — can be replaced with a
+  trojaned version by a compromised container. They now run as the runtime
+  UID, never as root, so this is data/wallet tampering rather than container
+  root escalation.
 - **Gupax config** (wallet, node settings) — could be read or modified
-- **Tor hidden service keys** — the keys are restricted to root in the
-  container, but if you mount their parent directory from a host path on
-  a FUSE share, the same world-writable concerns apply
+- **Tor hidden service keys** — the keys are owned by `debian-tor` in the
+  container when the volume allows it, but on a FUSE share the same
+  world-writable concerns apply to the parent directory
 
 **Mitigations:**
 - Keep your Unraid host secure — don't run untrusted containers
@@ -463,6 +510,22 @@ If a restart doesn't help, the X stack is usually the culprit. Common causes:
   is heavy and can stall the browser's canvas. Drop to `1920x1080x24` and
   retry.
 
+### Warnings in the log that are safe to ignore
+
+Not every line in `docker logs` is a fault. These are expected:
+
+| Line | Why |
+|---|---|
+| `JSONRPCRequest uv_poll_start returned error EBADF` / `P2Pool get_info RPC … Error (empty response)` | P2Pool starts before monerod has opened its RPC port; they stop within seconds of monerod answering. **If they persist, monerod is not running** — check the Node tab |
+| `RandomX_Hasher couldn't allocate RandomX … using large pages` | No hugepages in the container. Slower hashing, not an error |
+| `Util uPnPDiscover: no UPnP IGD devices found` | Docker has no UPnP gateway; ports are published by Docker instead |
+| `P2PServer peer <ip> banned for N seconds` | P2Pool banning a misbehaving peer |
+| `webSocketsHandshake: unknown connection error` | The noVNC client reconnecting; one every ~30 s is normal |
+| `Failed to create /home/miner/.cache for shader cache` / `error: XDG_RUNTIME_DIR is not set` | This build creates both directories; images older than it recompile shaders on each start |
+
+P2Pool logs **UTC** while websockify logs local time, so a six-hour offset between
+their timestamps is not a clock fault.
+
 ### Connection refused on port 6080
 
 Make sure the container is running:
@@ -485,9 +548,12 @@ docker compose logs
 ```
 
 A repeated crash-and-restart loop is usually Gupax itself exiting. The exit
-code is propagated, so `[+] Shutdown complete` followed by `Gupax exited
-(code: N)` tells you what it returned. If it exits immediately after start,
-the usual cause is a volume ownership problem — see
+code is propagated, so a crash ends the log with `[*] Gupax exited (code: N)`
+followed by the teardown lines and `[+] Shutdown complete` — `N` is Gupax's own
+return code (for example `137` for an OOM kill). A stop you asked for is not a
+crash: `docker stop` / `docker compose down` prints `[*] Received SIGTERM —
+stopping`, tears down once, and exits `0`. If Gupax exits immediately after
+start, the usual cause is a volume ownership problem — see
 [Ownership Requirements](#ownership-requirements-for-existing-blockchain-files).
 
 ### P2Pool spamming `empty response` / `EBADF` errors

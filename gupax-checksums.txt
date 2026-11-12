@@ -1,0 +1,12 @@
+# Pinned upstream Gupax release hashes.
+#
+# Format: <release tag> <asset filename> <sha256>
+# The Dockerfile verifies the downloaded tarball against this file. This is the
+# trusted digest; the upstream SHA256SUMS file is fetched from the same origin
+# as the tarball and therefore only detects corruption, not a replaced release.
+#
+# When CI auto-detects a newer semver release that is not listed here, the
+# build still succeeds but prints a warning. Add the new entry (from the
+# release's SHA256SUMS, ideally cross-checked against a second source) and
+# commit it to pin that release.
+v2.0.1 gupax-v2.0.1-linux-x64.tar.gz 67abf40f8c452f637a45644f3b80815cdc44f55e45bc3901d7f66179d65495d5

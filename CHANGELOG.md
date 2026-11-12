@@ -8,7 +8,254 @@ Versions follow the scheme `v{upstream-gupax}-{build-date}`. The base version
 tracks which Gupax release is bundled; the date suffix differentiates container
 builds. `v2.0.1` and `v2.0.1-YYYYMMDD` tags are Docker image tags — the
 `v`-prefixed tag is a moving tag that always points to the latest build of that
-upstream release.
+upstream release. `v2.0.1-YYYYMMDD-<sha7>` adds the commit and is the immutable
+reference; a same-day rebuild can replace the plain date tag.
+
+## [Unreleased] — 2026-11-11
+
+### Fixed
+
+- **The image could not build: the pinned Tor release was removed upstream**
+  (review C1) — `TOR_VERSION` pinned `0.4.9.14-1~resolute+1`, which the Tor
+  Project has dropped from the `resolute` pool; the suite now offers only
+  `0.4.9.16-1~resolute+1`. `apt-get install tor=<pin>` therefore failed and
+  every build aborted at that layer. Bumped to the version in the pool.
+- **The Tor version was pinned in two places** (review M3) — `pr-tests.yml`
+  compared the container's Tor against a hardcoded `0.4.9.14`, so bumping the
+  Dockerfile alone left CI red. The assertion now reads `ARG TOR_VERSION` from
+  the Dockerfile, making the pin single-source.
+- **Teardown hung when a stop arrived during startup** (review H1) — `cleanup()`
+  waited on six services with `wait "$VAR"`. When a PID variable was still
+  unset (a SIGTERM during the up-to-75s Tor bootstrap, or before
+  Xvfb/websockify/portal started), the empty expansion turned that into a bare
+  `wait`, which waits for **every** child of the script — so teardown blocked on
+  a live service, burned the full `stop_grace_period`, and the container was
+  SIGKILLed and recorded as 137, which reads exactly like an OOM kill. All six
+  teardowns now run through `stop_pid`, which returns immediately on an empty
+  PID.
+- **A graceful stop was recorded as exit 143 and tore down twice** (review M1) —
+  the signal trap ran `cleanup`, then the main path ran it again and exited
+  with 143, so every `docker stop` looked like a crash and printed a duplicate
+  shutdown sequence. `cleanup` is now idempotent, and the signal path exits 0
+  with an explicit `Received SIGTERM` line; Gupax's own exit code still
+  propagates when it dies by itself. The README's description of the log order
+  was inverted and is corrected (review L4). A second signal arriving during
+  teardown is now ignored rather than aborting the first one halfway.
+- **The GitHub token was visible in `curl`'s argv** (review L9) — the release
+  detector passed `Authorization: Bearer …` as a command-line argument, which is
+  world-readable in `/proc/<pid>/cmdline` and contradicts this project's own
+  rule for secrets. The header is now read from stdin with `-H @-`.
+- **A hardcoded UID 999 stood in for the image's `miner` account** (review L10) —
+  the Dockerfile creates `miner` with `useradd -r`, so its UID is allocated, not
+  fixed. `start.sh`, `setup-runtime-user.sh` and the CI default-UID assertion now
+  resolve the account instead of assuming 999.
+- **Debug output shipped in the normal startup log** (review L16) — the `[D]` X
+  keyboard/input dumps now require `GUPAX_DEBUG=true`.
+- **The image redistributed Gupax without its licence text** (review L6) —
+  `LICENSE` and `NOTICE` are now copied to `/usr/share/doc/gupax-docker/` and
+  `.dockerignore` no longer excludes them. The OCI licence label was metadata
+  only, not the licence the GPL requires to accompany a distribution.
+- **The Docker Hub description sync never verified its own write** (review M5) —
+  a 2xx from the PATCH only means the request was accepted, and this API
+  silently ignores fields it does not model. The script now reads
+  `full_description` back and fails if the value did not take. The base64
+  fallback for the raw README fetch was also wrong (`v3.raw` is plain text) and
+  is gone.
+- **Concurrent publishes could move `:latest` backwards** (review M6) — two
+  pushes to main built in parallel and raced on the tag, so the older commit
+  could finish last. The publish workflow now serialises on a concurrency group
+  and cancels a superseded run.
+- **A dead QEMU setup step** (review L7) — the build is `linux/amd64` only, so
+  setting up QEMU did nothing. Removed.
+- **A dispatch input was interpolated into shell and into JS** (review L8) — the
+  mirror workflow pasted `${{ inputs.tag }}` straight into `run:` and into a
+  template literal. It now arrives through `env:` and is referenced as a
+  variable.
+- **A harness failure counted as a test pass** (review L13) — the fake Tor
+  server reports 99 when it never started, and the "exits non-zero" assertions
+  accepted that. They now require exit 1 exactly.
+- **`pr-tests.yml` inherited the repository's default token permissions**
+  (review L17) — now `contents: read`.
+- **The Tor probe's timeout budget exceeded Docker's** (review L18) — the
+  bootstrap check used a 5 s connect timeout against a 5 s HEALTHCHECK timeout,
+  so it could be killed before printing why it failed. Now 3 s, and the contract
+  checker enforces the budget for every probe rather than only the noVNC one.
+- **The contract checker could not see the two most drift-prone surfaces**
+  (review L14) — it now compares the README and `templates/README` port tables
+  line for line, asserts the Tor version is parsed from the Dockerfile rather
+  than hardcoded, and checks every probe timeout.
+- **The VNC token and `TOR_EXPOSE_RPC=true` paths were untested** (review L11,
+  L12) — CI only ever ran the no-auth VNC branch and the RPC-off default. Two
+  new smoke steps assert that the token path uses `-passwdfile` without putting
+  the token in argv, and that the opt-in hidden-service RPC is published and
+  warned about.
+- **The 4 GB memory limit was below the stack's working set** (review M2) —
+  XMRig's RandomX dataset (~2.1 GB plus scratchpad), monerod during sync and the
+  X stack do not fit, so the container could be OOM-killed as 137. Raised to
+  6 GB in compose and the Unraid template. The figure is a footprint-based
+  estimate, not a measured peak; the docs say to confirm with `docker stats`.
+- **A lint suppression that could never fire** (review L15) — `.hadolint.yaml`
+  ignored SC2046, which only applies to an *unquoted* command substitution. The
+  Dockerfile has two, both quoted or assignments, so the ignore was dead weight
+  that would have hidden the first real one. Removed.
+- **Gupax could not write its shader cache** (live log evidence) — `useradd -m`
+  creates `/home/miner` as 0750 owned by `miner`, and `start.sh` only widens it
+  to 0755 (traversable, not writable). With the Unraid default `PUID=99` Gupax
+  logged `Failed to create /home/miner/.cache for shader cache (Permission
+  denied)--disabling` and recompiled shaders on every start. `start.sh` now
+  creates `~/.cache` owned by the runtime UID.
+- **`XDG_RUNTIME_DIR` was never set** (live log evidence) — Gupax logged
+  `error: XDG_RUNTIME_DIR is not set in the environment`. `start.sh` now creates
+  `/tmp/runtime-<PUID>` (0700, owned by the runtime UID) and exports it. Root
+  still reaches it through `DAC_OVERRIDE`, which the capability profile includes.
+  Both are best-effort: if a directory cannot be created, startup is unchanged.
+- **The DNS-blocklist warning misattributed the lookup** (verified against the
+  monerod source) — `--enable-dns-blocklist` fetches **TXT** records from
+  `blocklist.moneropulse.*` through the system resolver; it does not resolve
+  seed nodes. Seed-node DNS is a separate clearnet lookup that `--tx-proxy` does
+  not cover either, and only a full `--proxy` makes monerod disable both
+  (`--proxy-allow-dns-leaks` overrides that). The README no longer implies that
+  switching the toggle off makes monerod's DNS private.
+- **A branch build could never pass its own digest check** (review L20, found by
+  running it) — the publish workflow verifies the pushed image by inspecting
+  `:<commit-sha>`, but that tag is only created on `main`; every other ref pushes
+  `:<ref>-<sha>`. A `workflow_dispatch` build from a branch therefore compared
+  two empty digests and failed *after* successfully pushing the image. The
+  verification tag is now computed alongside the tag list, and a branch build no
+  longer rewrites the public Docker Hub description.
+- **Gupax aborted with `P2Pool Stats: Permission denied` on Unraid** (found
+  during 26.04 testing) — the FUSE branch of the permission logic probes
+  writability only at the volume root. That root is normally PUID-owned from
+  earlier runs, so the probe passed while `p2pool/`, recreated by `start.sh` as
+  root at every boot, was unreachable; Gupax then reported
+  `App error detected, skipping init_auto()` and showed its unrecoverable-error
+  screen. The probe now covers every directory Gupax writes
+  (`p2pool`, `node`, `xmrig`, `xmrig-proxy`) and falls back to world-writable
+  permissions if any of them is denied.
+- **The `gupax` group could never grant access** — `gosu` sets only the primary
+  GID and drops supplementary groups (verified against the shipped binary), so
+  the FUSE `chgrp gupax` + `g+rwX` strategy granted the Gupax process nothing,
+  and its `o-rwx` actively removed access it would otherwise have had. The
+  group attempt is kept as a first pass, but the fallback is now what runs on
+  Unraid; the log says so instead of implying group ownership worked.
+
+### Documented
+
+- **Port 18081 was documented as "✅ Yes"** (review M4) — monerod binds
+  `127.0.0.1` by default and additionally requires `--confirm-external-bind`
+  before it will bind elsewhere, so publishing the port is inert unless the
+  operator deliberately changes both. The port table, the Unraid template field
+  and the README now say so.
+- **The Docker Hub badge pointed at a manual-only workflow** (review L1) — a
+  status badge on `docker-hub-push.yml` could never show anything, because that
+  workflow has no push trigger. Removed.
+- **"Auto-restart" overclaimed** (review L2) — `restart: unless-stopped` acts on
+  exit only; a hung GUI is reported by the health check, not restarted. README
+  and TODO now say that.
+- **"Paste the four Tor arguments" listed three** (review L3) — corrected.
+- **`ca_profile.xml` read as an orphaned file** (review L5) — kept, and now
+  documented in the file itself and in `templates/README.md` as the maintainer
+  profile staged for the Community Applications PR.
+- **The DNS-blocklist toggle was not named** — the README warned against
+  *adding* `--enable-dns-blocklist` but not against leaving Gupax's Node-tab
+  **DNS blocklist** toggle on while Tor is enabled. Called out explicitly.
+- The Dockerfile comment claiming `TOR_VERSION` and `TOR_KEYRING_SHA256` must
+  be "bumped together" was wrong and is corrected: the pins are independent,
+  and bumping the keyring hash alongside a Tor release breaks the build.
+- **Runtime-downloaded miner binaries are not verified** (review finding H2) —
+  the image pins and checks Gupax, the Tor package and the Tor keyring, but
+  P2Pool, XMRig, xmrig-proxy and monerod are fetched and executed at runtime by
+  Gupax with no hash or signature check. Pinning them in the image is not
+  possible: Gupax owns version selection and replaces them on its own update
+  path. Rather than fight that, the gap is now documented in `SECURITY.md`:
+  download origins per binary, the distinction between the checks the image does
+  and does not make, the threat model (integrity and upstream compromise, not
+  privilege escalation — the binaries never run as root), a host-side
+  verification recipe that compares the running binary against the
+  signature-verified upstream archive, and egress guidance.
+
+## [Unreleased] — 2026-10-18
+
+Code-review remediation (22 findings). Runtime verification of the container
+changes was not possible in the review environment; the CI job in
+`.github/workflows/pr-tests.yml` is the executable gate for every runtime
+assertion listed here.
+
+### Fixed
+
+- **XMRig could not start on the default UID 999** (GUP-01) — the `gupax`
+  group was only created inside a block that was skipped whenever the UID
+  already existed, and `useradd -g <gid>` failed for a GID absent from the
+  image. `setup-runtime-user.sh` now always creates the group, resolves or
+  creates the primary group, adds the runtime user to `gupax`, and fails
+  closed. CI exercises 999/999, 99/100 and 1000/1000.
+- **`.env` was inert** (GUP-02) — every user-facing variable is interpolated
+  in `docker-compose.yml`, and CI asserts a `.env` file reaches the rendered
+  service.
+- **Unraid published unauthenticated VNC 5900** (GUP-03) — the template's VNC
+  port now defaults to empty, and without `VNC_AUTH_TOKEN` x11vnc binds to
+  loopback (`-localhost`), so noVNC still works but the port cannot expose an
+  unauthenticated desktop.
+- **Wallet RPC was published on the hidden service** (GUP-04) — now opt-in via
+  `TOR_EXPOSE_RPC=true`, with a loud warning when RPC is unrestricted.
+- **gosu failure fell back to root** (GUP-05) — the entrypoint now exits with
+  a clear error instead of running the mining stack as root.
+- **Healthcheck could not see a hung Gupax or unbootstrapped Tor** (GUP-06) —
+  added a Tor ControlPort/bootstrap check, an X server probe, a Gupax window
+  check and a `/proc` process-state check (stopped/zombie).
+- **No init/reaper** (GUP-07) — `init: true` in compose and `--init` in the
+  Unraid template; CI asserts PID 1 is `docker-init`.
+- **NOPASSWD root on a writable XMRig binary** (GUP-08) — removed the sudo
+  rule and the `sudo` package. XMRig runs unprivileged; the pkexec wrapper is
+  a passthrough. FUSE permissions are group-first with a verified fallback.
+- **CI never exercised the hardened capability profile** (GUP-09) — the smoke
+  container now runs with the exact compose cap set, asserted by a
+  cross-surface contract test.
+- **Two independent registry builds** (GUP-10) — one build pushes the same
+  digest to GHCR and Docker Hub; a step verifies both digests match. The
+  former Docker Hub workflow is now a manual manifest-mirror repair path.
+- **`docker run` example omitted hardening and the Tor volume** (GUP-11) —
+  mirrors compose (`--init`, cap drop/add, stop timeout, `gupax-tor`).
+- **Tor provenance gate only checked a version floor** (GUP-12) — CI asserts
+  the installed package comes from `deb.torproject.org`.
+- **Tor ran as root** (GUP-13) — runs as `debian-tor` when the volume allows
+  ownership changes; SECURITY.md now states exactly which processes stay root.
+- **Banner claimed tx-only mode regardless of monerod args** (GUP-14) —
+  reworded to distinguish starting Tor from routing through it.
+- **Gupax tarball was not hash-pinned** (GUP-15) — `gupax-checksums.txt`
+  supplies the trusted digest; the upstream sums remain a secondary check.
+  Unpinned auto-detected releases emit a CI warning.
+- **Tor package/keyring were not immutably pinned** (GUP-16) — keyring `.deb`
+  SHA256 and `tor=<version>` are pinned build args.
+- **No stop timeout on Unraid** (GUP-17) — `--stop-timeout=30` matches
+  compose.
+- **Documentation drift** (GUP-18) — corrected the PUID/PGID defaults, the
+  startup-log claim, the VNC security wording, the version-support wording,
+  the duplicate TODO checkbox, CONTRIBUTING's UID description, the
+  `.dockerignore` stale entry and the hadolint DL3008 rationale.
+- **Non-canonical licence and missing provenance labels** (GUP-19) —
+  `GPL-3.0-or-later`, `revision`, `created`.
+- **VNC tokens were silently truncated** (GUP-20) — startup warns when the
+  token exceeds the 8-character protocol limit.
+- **Healthcheck's internal timeout equalled Docker's** (GUP-21) — reduced to
+  3s against Docker's 5s.
+- **Newer non-semver releases were skipped silently** (GUP-22) — the detector
+  emits a warning naming the skipped tag; fixtures pin the behaviour.
+
+## [Unreleased] — 2026-10-05
+
+Base image migration (closes #84):
+
+- `ubuntu:22.04` → `ubuntu:26.04` LTS ("resolute"), still digest-pinned.
+  22.04 standard support ends April 2027.
+- `libasound2` → `libasound2t64`. Ubuntu completed the 64-bit `time_t`
+  transition in 24.04 and no package named `libasound2` exists after that;
+  `libasound2t64` declares `Provides: libasound2`, so the dependency contract
+  is unchanged.
+- Tor apt suite `jammy` → `resolute`, which also brought a current Tor
+  (0.4.9.x; the pin now names the exact version).
+
+---
 
 ## [Unreleased] — 2026-09-29
 

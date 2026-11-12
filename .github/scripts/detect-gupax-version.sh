@@ -30,18 +30,38 @@
 set -euo pipefail
 
 API_URL="https://api.github.com/repos/gupax-io/gupax/releases"
-AUTH_ARGS=()
-if [ -n "${GITHUB_TOKEN:-}" ]; then
-    AUTH_ARGS=(-H "Authorization: Bearer ${GITHUB_TOKEN}")
-fi
+
+# The token is passed as a header read from stdin, never on the command line:
+# curl's argv is world-readable in /proc/<pid>/cmdline, and this project's own
+# rule is that secrets do not go there. GitHub tokens are [A-Za-z0-9_], so the
+# header needs no further escaping.
+gh_api() {
+    if [ -n "${GITHUB_TOKEN:-}" ]; then
+        printf 'Authorization: Bearer %s\n' "$GITHUB_TOKEN" \
+            | curl -fsSL -H @- "$1"
+    else
+        curl -fsSL "$1"
+    fi
+}
 
 # Fail fast on API errors instead of half-parsing a rate-limit page.
 # per_page=100: every upstream release in one request, so old releases can
 # never crowd the newest semver tag off the first page.
-RESPONSE=$(curl -fsSL "${AUTH_ARGS[@]}" "${API_URL}?per_page=100") || {
-    echo "ERROR: GitHub API request failed" >&2
-    exit 1
-}
+#
+# GUPAX_RELEASES_FILE is a test seam: .github/scripts/test-detect-version.sh
+# feeds fixture JSON through it, so the selection and warning logic is pinned
+# without hitting the network (#GUP-22).
+if [ -n "${GUPAX_RELEASES_FILE:-}" ]; then
+    RESPONSE=$(cat "$GUPAX_RELEASES_FILE") || {
+        echo "ERROR: could not read GUPAX_RELEASES_FILE=$GUPAX_RELEASES_FILE" >&2
+        exit 1
+    }
+else
+    RESPONSE=$(gh_api "${API_URL}?per_page=100") || {
+        echo "ERROR: GitHub API request failed" >&2
+        exit 1
+    }
+fi
 
 # The API response can exceed the per-argument size limit (128 KiB on Linux),
 # so it is passed via a temp file instead of argv.
@@ -89,7 +109,7 @@ for rel in candidates:
         None,
     )
     if linux_asset:
-        chosen = (rel["tag_name"], linux_asset)
+        chosen = (rel, linux_asset)
         break
 
 if not chosen:
@@ -97,7 +117,31 @@ if not chosen:
         "ERROR: no non-prerelease semver release has a linux-x64 tarball asset\n")
     sys.exit(1)
 
-tag, asset = chosen
+rel, asset = chosen
+tag = rel["tag_name"]
+
+# #GUP-22: a newer release under a non-semver tag is deliberately skipped
+# (the #68/C1 fix), but skipping it silently reintroduces the class of bug
+# where a real upstream fix never reaches the image. Emit a GitHub annotation
+# and a plain warning so the condition is visible in the Actions summary.
+chosen_published = rel.get("published_at") or ""
+newer_nonsemver = sorted(
+    (
+        r for r in releases
+        if not r.get("prerelease")
+        and not semver.match(r.get("tag_name", ""))
+        and (r.get("published_at") or "") > chosen_published
+    ),
+    key=lambda r: r.get("published_at") or "",
+)
+for skipped in newer_nonsemver:
+    sys.stderr.write(
+        f"::warning title=Upstream release skipped::"
+        f"{skipped.get('tag_name')} was published after {tag} but is not a "
+        f"semver tag. The image keeps {tag}; check whether it contains a "
+        f"security fix.\n"
+    )
+
 print(f"VERSION={tag}")
 print(f"GUPAX_ASSET={asset}")
 PYEOF
