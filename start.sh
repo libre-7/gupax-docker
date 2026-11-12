@@ -181,19 +181,11 @@ FS_TYPE=$(stat -f -c '%T' /home/miner/.local/share/gupax 2>/dev/null || echo "un
 chmod a+rx /home/miner /home/miner/.local /home/miner/.local/share 2>/dev/null || true
 
 if [ "$FS_TYPE" = "fuse.shfs" ] || [ "$FS_TYPE" = "fuseblk" ]; then
-    # Unraid FUSE: chown is silently ignored. Prefer a group ACL over
-    # world-writable permissions — only the runtime principal needs write
-    # access. If the mount ignores chgrp too, verify as the runtime user and
-    # only then fall back to a+rwX (#GUP-08).
-    echo "[*] Detected FUSE filesystem ($FS_TYPE) — applying group-based permissions"
+    # Unraid FUSE: chown is silently ignored, so try group ownership first. The
+    # shared probe below decides whether that actually worked.
+    echo "[*] Detected FUSE filesystem ($FS_TYPE) — trying group-based permissions"
     chgrp -R gupax /home/miner/.local/share/gupax 2>/dev/null || true
     chmod -R g+rwX,o-rwx /home/miner/.local/share/gupax 2>/dev/null || true
-    if ! gosu "$PUID:$PGID" test -w /home/miner/.local/share/gupax 2>/dev/null; then
-        echo "[!] WARNING: this FUSE mount does not honour group ownership."
-        echo "    Falling back to world-writable volume permissions. Binaries are"
-        echo "    never executed as root, so this is data tampering, not privesc."
-        chmod -R a+rwX /home/miner/.local/share/gupax 2>/dev/null || true
-    fi
     chmod a+rwX /home/miner/.bitmonero 2>/dev/null || true
 else
     # Normal filesystem: chown actually works.
@@ -204,6 +196,32 @@ else
     chmod -R u+rwX,go+rX /home/miner/.local/share/gupax 2>/dev/null || true
     chown "$PUID:$PGID" /home/miner/.bitmonero 2>/dev/null || true
     chmod u+rwX,go+rX /home/miner/.bitmonero 2>/dev/null || true
+fi
+
+# Verify whichever strategy ran above, on every directory Gupax actually writes.
+#
+# Two things made the old root-only probe dangerous:
+#   * gosu sets only the primary GID and drops supplementary groups (verified
+#     against the shipped gosu), so the Gupax process never carries the `gupax`
+#     group. `chgrp gupax` therefore grants it nothing, and the `o-rwx` above
+#     actively removes the access it would otherwise have had.
+#   * this script creates p2pool/node/xmrig/xmrig-proxy as root at every start.
+#     The volume root can already be PUID-owned from earlier runs, so a root-only
+#     probe passes while a freshly created subdirectory is unreachable. Gupax
+#     then aborts at startup with
+#       "Gupax P2Pool Stats: Permission denied (os error 13)"
+#     and skips init_auto().
+_denied=""
+for _d in "" /p2pool /node /xmrig /xmrig-proxy; do
+    gosu "$PUID:$PGID" test -w "/home/miner/.local/share/gupax$_d" 2>/dev/null \
+        || _denied="/home/miner/.local/share/gupax$_d"
+done
+if [ -n "$_denied" ]; then
+    echo "[!] WARNING: UID:$PUID cannot write $_denied"
+    echo "    gosu drops supplementary groups, so the gupax group cannot help here."
+    echo "    Falling back to world-writable volume permissions. Binaries are"
+    echo "    never executed as root, so this is data tampering, not privesc."
+    chmod -R a+rwX /home/miner/.local/share/gupax 2>/dev/null || true
 fi
 
 # Runtime directories Gupax and the portal expect, which the image does not

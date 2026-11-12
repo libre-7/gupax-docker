@@ -123,6 +123,21 @@ reference; a same-day rebuild can replace the plain date tag.
   two empty digests and failed *after* successfully pushing the image. The
   verification tag is now computed alongside the tag list, and a branch build no
   longer rewrites the public Docker Hub description.
+- **Gupax aborted with `P2Pool Stats: Permission denied` on Unraid** (found
+  during 26.04 testing) — the FUSE branch of the permission logic probes
+  writability only at the volume root. That root is normally PUID-owned from
+  earlier runs, so the probe passed while `p2pool/`, recreated by `start.sh` as
+  root at every boot, was unreachable; Gupax then reported
+  `App error detected, skipping init_auto()` and showed its unrecoverable-error
+  screen. The probe now covers every directory Gupax writes
+  (`p2pool`, `node`, `xmrig`, `xmrig-proxy`) and falls back to world-writable
+  permissions if any of them is denied.
+- **The `gupax` group could never grant access** — `gosu` sets only the primary
+  GID and drops supplementary groups (verified against the shipped binary), so
+  the FUSE `chgrp gupax` + `g+rwX` strategy granted the Gupax process nothing,
+  and its `o-rwx` actively removed access it would otherwise have had. The
+  group attempt is kept as a first pass, but the fallback is now what runs on
+  Unraid; the log says so instead of implying group ownership worked.
 
 ### Documented
 
