@@ -20,7 +20,7 @@
 - [x] **Base image migration** — Migrated `ubuntu:22.04` → `ubuntu:26.04` LTS ("resolute"); 22.04 standard support ends April 2027. Required renaming `libasound2` → `libasound2t64` (no package named `libasound2` exists in 24.04+; the t64 package `Provides: libasound2`) and moving the Tor apt suite `jammy` → `resolute`; Tor is now pinned to the Tor Project build. Closes #84
 - [ ] **Drop the audio packages** — Gupax's binary (v2.0.1 ELF64 PIE) contains zero references to `libasound`/`libpulse`, so `libasound2t64` and `libpulse0` may be removable outright. Kept in the 26.04 migration because GTK/zenity can pull audio transitively — verify separately
 - [x] **Issue templates** — Bug + feature forms, blank issues disabled, contact links for security advisories and upstream Gupax/Monero
-- [ ] **Tor pin refresh** — Both the keyring `.deb` SHA256 and `tor=<version>` are pinned in the Dockerfile. Dependabot covers neither, so both must be bumped by hand (together) when the Tor Project rotates the keyring or removes the pinned package from the pool — otherwise the build fails loudly at the keyring check or at apt resolution.
+- [ ] **Tor pin refresh** — Two **independent** pins in the Dockerfile: `tor=<version>` (moves with each Tor release) and the keyring `.deb` SHA256 (changes only when the keyring package is reissued — currently `2025.08.08`). Dependabot covers neither, so each must be bumped by hand when the Tor Project removes the pinned version from the pool or reissues the keyring. When a version disappears, read `dists/resolute/main/binary-amd64/Packages` for what replaced it; do **not** bump the keyring hash in the same commit unless the keyring `.deb` itself changed.
 
 ## 🟢 Nice to Have — Polish & Production Hardening
 

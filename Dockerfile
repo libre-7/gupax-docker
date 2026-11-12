@@ -57,11 +57,16 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # mismatch still resolves — it just silently mixes release cadences. Keep
 # this line in sync with the FROM above.
 #
-# Both pinned values are deliberate bumps. When the Tor Project removes this
-# version from the pool, the build fails here (loudly) rather than drifting to
-# whatever is current that day. Bump TOR_VERSION and TOR_KEYRING_SHA256
-# together — see TODO.md.
-ARG TOR_VERSION=0.4.9.14-1~resolute+1
+# Both pinned values are deliberate bumps. When the Tor Project removes a
+# version from the pool the build fails here (loudly) rather than drifting to
+# whatever is current that day — see TODO.md for the refresh procedure.
+#
+# The two pins are INDEPENDENT. TOR_VERSION moves with each Tor release;
+# TOR_KEYRING_SHA256 changes only when the Tor Project reissues the keyring
+# package itself (2025.08.08 is current). Bumping the keyring hash alongside a
+# Tor release will break the build — verify it against a freshly downloaded
+# keyring .deb instead.
+ARG TOR_VERSION=0.4.9.16-1~resolute+1
 ARG TOR_KEYRING_SHA256=e5bd5c6442ead01e183838be611d6bdf04896ba299095fbb4dc5ab5fe8f19bf6
 RUN curl -fsSL https://deb.torproject.org/torproject.org/pool/main/d/deb.torproject.org-keyring/deb.torproject.org-keyring_2025.08.08_all.deb \
     -o /tmp/tor-keyring.deb \

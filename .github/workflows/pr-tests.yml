@@ -325,8 +325,17 @@ jobs:
             exit 1
           fi
           echo "Tor version in container: $TOR_VER"
-          if [ "$TOR_VER" != "0.4.9.14" ]; then
-            echo "FAIL: Tor $TOR_VER does not match the pinned 0.4.9.14"
+          # Single source of truth: the Dockerfile's ARG TOR_VERSION. A literal
+          # here drifts the moment the pin is bumped, so a one-line Dockerfile
+          # change leaves CI red for an unrelated reason (review M3).
+          TOR_PIN="$(sed -n 's/^ARG TOR_VERSION=\([0-9][0-9.]*\).*/\1/p' Dockerfile)"
+          if [ -z "$TOR_PIN" ]; then
+            echo "FAIL: could not parse ARG TOR_VERSION from the Dockerfile"
+            exit 1
+          fi
+          echo "Dockerfile Tor pin: $TOR_PIN"
+          if [ "$TOR_VER" != "$TOR_PIN" ]; then
+            echo "FAIL: Tor $TOR_VER does not match the Dockerfile pin $TOR_PIN"
             exit 1
           fi
           # The version alone could come from the Ubuntu archive once it

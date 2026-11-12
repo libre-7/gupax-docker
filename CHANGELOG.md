@@ -11,6 +11,26 @@ builds. `v2.0.1` and `v2.0.1-YYYYMMDD` tags are Docker image tags — the
 upstream release. `v2.0.1-YYYYMMDD-<sha7>` adds the commit and is the immutable
 reference; a same-day rebuild can replace the plain date tag.
 
+## [Unreleased] — 2026-11-11
+
+### Fixed
+
+- **The image could not build: the pinned Tor release was removed upstream**
+  (review C1) — `TOR_VERSION` pinned `0.4.9.14-1~resolute+1`, which the Tor
+  Project has dropped from the `resolute` pool; the suite now offers only
+  `0.4.9.16-1~resolute+1`. `apt-get install tor=<pin>` therefore failed and
+  every build aborted at that layer. Bumped to the version in the pool.
+- **The Tor version was pinned in two places** (review M3) — `pr-tests.yml`
+  compared the container's Tor against a hardcoded `0.4.9.14`, so bumping the
+  Dockerfile alone left CI red. The assertion now reads `ARG TOR_VERSION` from
+  the Dockerfile, making the pin single-source.
+
+### Documented
+
+- The Dockerfile comment claiming `TOR_VERSION` and `TOR_KEYRING_SHA256` must
+  be "bumped together" was wrong and is corrected: the pins are independent,
+  and bumping the keyring hash alongside a Tor release breaks the build.
+
 ## [Unreleased] — 2026-10-18
 
 Code-review remediation (22 findings). Runtime verification of the container
