@@ -34,7 +34,10 @@ except OSError as exc:
     sys.exit(1)
 
 try:
-    sock = socket.create_connection((host, port), timeout=5)
+    # 3s, not 5s: Docker's HEALTHCHECK --timeout is 5s, and it starts its timer
+    # before exec, so a 5s connect timeout would consume the whole budget and be
+    # killed at its own deadline — losing the explanatory message (#review L18).
+    sock = socket.create_connection((host, port), timeout=3)
 except OSError as exc:
     print(f"tor-bootstrap: control port {host}:{port} unreachable: {exc}", file=sys.stderr)
     sys.exit(1)

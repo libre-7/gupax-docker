@@ -46,18 +46,25 @@ jobs:
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
       - name: Copy manifest (no rebuild)
+        # The tag comes in through env, not by interpolating ${{ inputs.tag }}
+        # into the script: a dispatch input is arbitrary text, and direct
+        # interpolation makes it shell (and here, JS) metacharacters (#review L8).
+        env:
+          TAG: ${{ inputs.tag }}
         run: |
-          SRC="${GHCR_IMAGE}:${{ inputs.tag }}"
-          DST="${DOCKERHUB_IMAGE}:${{ inputs.tag }}"
+          SRC="${GHCR_IMAGE}:${TAG}"
+          DST="${DOCKERHUB_IMAGE}:${TAG}"
           echo "Mirroring $SRC -> $DST"
           docker buildx imagetools create -t "$DST" "$SRC"
 
       - name: Verify mirrored digest
+        env:
+          TAG: ${{ inputs.tag }}
         run: |
           SRC_DIGEST=$(docker buildx imagetools inspect \
-            "${GHCR_IMAGE}:${{ inputs.tag }}" --format '{{json .Manifest.Digest}}' | tr -d '"')
+            "${GHCR_IMAGE}:${TAG}" --format '{{json .Manifest.Digest}}' | tr -d '"')
           DST_DIGEST=$(docker buildx imagetools inspect \
-            "${DOCKERHUB_IMAGE}:${{ inputs.tag }}" --format '{{json .Manifest.Digest}}' | tr -d '"')
+            "${DOCKERHUB_IMAGE}:${TAG}" --format '{{json .Manifest.Digest}}' | tr -d '"')
           echo "GHCR:       $SRC_DIGEST"
           echo "Docker Hub: $DST_DIGEST"
           [ "$SRC_DIGEST" = "$DST_DIGEST" ]
@@ -66,6 +73,8 @@ jobs:
       - name: Alert on failure
         if: failure()
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+        env:
+          TAG: ${{ inputs.tag }}
         with:
           script: |
             const runUrl = `${process.env.GITHUB_SERVER_URL}/${process.env.GITHUB_REPOSITORY}/actions/runs/${process.env.GITHUB_RUN_ID}`;
@@ -73,5 +82,5 @@ jobs:
               owner: context.repo.owner,
               repo: context.repo.repo,
               issue_number: 76,
-              body: `:rotating_light: **Manual GHCR -> Docker Hub mirror failed** for tag \`${{ inputs.tag }}\`.\n\nWorkflow run: ${runUrl}\n\n_This is an automated alert. Issue #76 is the permanent CI watch target — do not close it, or these alerts stop working._`
+              body: `:rotating_light: **Manual GHCR -> Docker Hub mirror failed** for tag \`${process.env.TAG}\`.\n\nWorkflow run: ${runUrl}\n\n_This is an automated alert. Issue #76 is the permanent CI watch target — do not close it, or these alerts stop working._`
             });

@@ -327,7 +327,7 @@ If you have an existing Monero blockchain on your Unraid server:
 | Port | Service | Category | Map | Description |
 |---|---|---|---|---|
 | `6080` | noVNC | Access | ✅ **Yes** | Web UI — open in your browser |
-| `5900` | VNC | Access | ⚠️ **Optional** | Direct VNC — empty by default. Only set it if `VNC_AUTH_TOKEN` is set; without a token x11vnc listens on loopback only |
+| `5900` | VNC | Access | ⚠️ **Optional** | Direct VNC — **empty by default** (not published). Only set it if `VNC_AUTH_TOKEN` is set; without a token x11vnc listens on loopback only |
 | `3333` | P2Pool | Mining | ✅ **Yes** | Stratum — external miners connect here |
 | `37889` | P2Pool | Mining | ✅ **Yes** | P2P — p2pool peer connections |
 | `18080` | monerod | Node | ✅ **Yes** | P2P network — connects to other Monero nodes |

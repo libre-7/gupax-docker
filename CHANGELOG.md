@@ -54,6 +54,35 @@ reference; a same-day rebuild can replace the plain date tag.
   `LICENSE` and `NOTICE` are now copied to `/usr/share/doc/gupax-docker/` and
   `.dockerignore` no longer excludes them. The OCI licence label was metadata
   only, not the licence the GPL requires to accompany a distribution.
+- **The Docker Hub description sync never verified its own write** (review M5) —
+  a 2xx from the PATCH only means the request was accepted, and this API
+  silently ignores fields it does not model. The script now reads
+  `full_description` back and fails if the value did not take. The base64
+  fallback for the raw README fetch was also wrong (`v3.raw` is plain text) and
+  is gone.
+- **Concurrent publishes could move `:latest` backwards** (review M6) — two
+  pushes to main built in parallel and raced on the tag, so the older commit
+  could finish last. The publish workflow now serialises on a concurrency group
+  and cancels a superseded run.
+- **A dead QEMU setup step** (review L7) — the build is `linux/amd64` only, so
+  setting up QEMU did nothing. Removed.
+- **A dispatch input was interpolated into shell and into JS** (review L8) — the
+  mirror workflow pasted `${{ inputs.tag }}` straight into `run:` and into a
+  template literal. It now arrives through `env:` and is referenced as a
+  variable.
+- **A harness failure counted as a test pass** (review L13) — the fake Tor
+  server reports 99 when it never started, and the "exits non-zero" assertions
+  accepted that. They now require exit 1 exactly.
+- **`pr-tests.yml` inherited the repository's default token permissions**
+  (review L17) — now `contents: read`.
+- **The Tor probe's timeout budget exceeded Docker's** (review L18) — the
+  bootstrap check used a 5 s connect timeout against a 5 s HEALTHCHECK timeout,
+  so it could be killed before printing why it failed. Now 3 s, and the contract
+  checker enforces the budget for every probe rather than only the noVNC one.
+- **The contract checker could not see the two most drift-prone surfaces**
+  (review L14) — it now compares the README and `templates/README` port tables
+  line for line, asserts the Tor version is parsed from the Dockerfile rather
+  than hardcoded, and checks every probe timeout.
 
 ### Documented
 

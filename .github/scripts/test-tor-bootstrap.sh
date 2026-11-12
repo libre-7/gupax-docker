@@ -118,12 +118,15 @@ grep -q '100% — circuit ready' "$WORK/100.out"
 report $? "PROGRESS=100 is reported as ready"
 
 run_case 50 "partial"
-report $((CASE_RC != 0 ? 0 : 1)) "PROGRESS=50 exits non-zero"
+# Assert exit 1 exactly, not "non-zero": run_case reports 99 when the fake
+# server never started, and `!= 0` counted that harness failure as a pass
+# (#review L13).
+report $((CASE_RC == 1 ? 0 : 1)) "PROGRESS=50 exits 1"
 grep -q '50%' "$WORK/50.out"
 report $? "partial bootstrap reports its progress"
 
 run_case badauth "badauth"
-report $((CASE_RC != 0 ? 0 : 1)) "authentication failure exits non-zero"
+report $((CASE_RC == 1 ? 0 : 1)) "authentication failure exits 1"
 grep -q 'authentication failed' "$WORK/badauth.out"
 report $? "authentication failure is explained"
 

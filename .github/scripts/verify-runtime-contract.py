@@ -40,6 +40,9 @@ template = text("templates/gupax-docker.xml")
 dockerfile = text("Dockerfile")
 start = text("start.sh")
 healthcheck = text("healthcheck.sh")
+readme = text("README.md")
+templates_readme = text("templates/README.md")
+tor_check = text("tor-bootstrap-check.sh")
 pr_tests = text(".github/workflows/pr-tests.yml")
 
 # --------------------------------------------------------------------------
@@ -145,6 +148,50 @@ if internal and docker_timeout:
 for var in ["TOR_ENABLED", "TOR_EXPOSE_RPC", "VNC_AUTH_TOKEN", "PUID", "PGID",
             "MONERO_RPC_RESTRICTED", "SCREEN_RESOLUTION"]:
     check(f"template exposes {var}", f'Target="{var}"' in template)
+
+# --------------------------------------------------------------------------
+# Port table parity (review L14) — the master table is documented as canonical
+# in two files, so drift is only visible when they are compared
+# --------------------------------------------------------------------------
+def port_rows(doc: str) -> list[str]:
+    return [ln.strip() for ln in doc.splitlines()
+            if re.match(r"^\|\s*`\d+`", ln.strip())]
+
+
+check(
+    "README and templates/README port tables are identical",
+    port_rows(readme) == port_rows(templates_readme),
+    "the two copies of the master port table have drifted",
+)
+
+# --------------------------------------------------------------------------
+# Tor version single-source (review M3) — a literal in CI drifts from the pin
+# --------------------------------------------------------------------------
+tor_pin = re.search(r"^ARG TOR_VERSION=([0-9][0-9.]*)", dockerfile, re.M)
+check("Dockerfile TOR_VERSION is parseable", tor_pin is not None)
+check(
+    "pr-tests derives the Tor version from the Dockerfile",
+    "ARG TOR_VERSION" in pr_tests,
+    "the CI assertion must parse the pin, not hardcode it",
+)
+
+# --------------------------------------------------------------------------
+# Probe timeout budget (review L18) — every internal timeout must stay below
+# Docker's HEALTHCHECK timeout, not just the noVNC probe
+# --------------------------------------------------------------------------
+if docker_timeout:
+    probe_timeouts = {
+        "healthcheck.sh": [int(t) for t in re.findall(r"timeout=(\d+)", healthcheck)],
+        "tor-bootstrap-check.sh": [int(t) for t in re.findall(r"timeout=(\d+)", tor_check)],
+    }
+    for name, values in probe_timeouts.items():
+        check(f"{name} declares an internal timeout", bool(values))
+        if values:
+            check(
+                f"{name} timeouts are below Docker's probe timeout",
+                all(v < int(docker_timeout.group(1)) for v in values),
+                f"found {values}s vs Docker {docker_timeout.group(1)}s",
+            )
 
 # --------------------------------------------------------------------------
 print()
