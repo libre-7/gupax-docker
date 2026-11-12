@@ -426,6 +426,7 @@ chown -R 99:100 /path/to/your/blockchain
 - Only expose port 6080 to trusted networks
 - For production use, consider adding authentication at the network level
 - **XMRig runs unprivileged.** The image no longer grants passwordless root execution of the runtime-downloaded XMRig binary. That binary lives on a writable volume, so root execution would let anything able to write the volume run code as container root. The trade-off is that XMRig's MSR optimisation is unavailable; hugepages and normal mining still work. See `SECURITY.md`.
+- **The miner binaries Gupax downloads at runtime are not verified by this image.** TLS protects them in transit, but no hash or signature is checked before they execute. They run as the unprivileged runtime user, so this is an integrity risk rather than a privilege boundary. See [SECURITY.md → Runtime-downloaded miner binaries](SECURITY.md#runtime-downloaded-miner-binaries-not-verified-by-this-image) for the trust model and a verification recipe.
 
 ### Unraid FUSE Filesystems (Important)
 

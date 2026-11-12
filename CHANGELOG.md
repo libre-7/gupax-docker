@@ -118,6 +118,17 @@ reference; a same-day rebuild can replace the plain date tag.
 - The Dockerfile comment claiming `TOR_VERSION` and `TOR_KEYRING_SHA256` must
   be "bumped together" was wrong and is corrected: the pins are independent,
   and bumping the keyring hash alongside a Tor release breaks the build.
+- **Runtime-downloaded miner binaries are not verified** (review finding H2) —
+  the image pins and checks Gupax, the Tor package and the Tor keyring, but
+  P2Pool, XMRig, xmrig-proxy and monerod are fetched and executed at runtime by
+  Gupax with no hash or signature check. Pinning them in the image is not
+  possible: Gupax owns version selection and replaces them on its own update
+  path. Rather than fight that, the gap is now documented in `SECURITY.md`:
+  download origins per binary, the distinction between the checks the image does
+  and does not make, the threat model (integrity and upstream compromise, not
+  privilege escalation — the binaries never run as root), a host-side
+  verification recipe that compares the running binary against the
+  signature-verified upstream archive, and egress guidance.
 
 ## [Unreleased] — 2026-10-18
 
