@@ -94,6 +94,10 @@ reference; a same-day rebuild can replace the plain date tag.
   X stack do not fit, so the container could be OOM-killed as 137. Raised to
   6 GB in compose and the Unraid template. The figure is a footprint-based
   estimate, not a measured peak; the docs say to confirm with `docker stats`.
+- **A lint suppression that could never fire** (review L15) — `.hadolint.yaml`
+  ignored SC2046, which only applies to an *unquoted* command substitution. The
+  Dockerfile has two, both quoted or assignments, so the ignore was dead weight
+  that would have hidden the first real one. Removed.
 
 ### Documented
 

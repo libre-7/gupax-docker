@@ -5,4 +5,7 @@ ignored:
   # on every Ubuntu security update.
   - DL3008
   - DL3059   # Multiple consecutive RUN instructions (keeps layers cacheable)
-  - SC2046   # Quote eval (handled explicitly)
+  # SC2046 is deliberately NOT ignored: it only fires on an *unquoted* command
+  # substitution, and the Dockerfile's two (`[arch=$(dpkg ...)]` inside quotes,
+  # `PINNED=$(awk ...)` as an assignment) are both fine. Suppressing it would
+  # hide the first genuinely unquoted one (#review L15).
