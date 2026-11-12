@@ -453,6 +453,89 @@ jobs:
           docker exec gupax-test /usr/local/bin/healthcheck.sh || true
           exit 1
 
+      - name: VNC auth token path is exercised (review L11)
+        # Only the no-auth branch was ever run in CI. The token branch uses
+        # -passwdfile (to keep the secret out of argv) and removes the temp file
+        # after startup; none of that was covered.
+        run: |
+          docker volume create gupax-vnc-data >/dev/null
+          docker run -d --name gupax-vnc \
+            --init \
+            --cap-drop=ALL \
+            --cap-add=SETUID --cap-add=SETGID --cap-add=DAC_OVERRIDE \
+            --cap-add=FOWNER --cap-add=CHOWN \
+            -e VNC_AUTH_TOKEN=testtoken1234 \
+            -v gupax-vnc-data:/home/miner/.local/share/gupax \
+            gupax-docker:pr-test >/dev/null
+
+          for i in $(seq 1 30); do
+            docker exec gupax-vnc pgrep -x x11vnc >/dev/null 2>&1 && break
+            if [ "$i" -eq 30 ]; then
+              echo "FAIL: x11vnc never started"
+              docker logs gupax-vnc
+              exit 1
+            fi
+            sleep 2
+          done
+
+          CMDLINE=$(docker exec gupax-vnc sh -c 'tr "\0" " " < /proc/$(pgrep -x x11vnc)/cmdline')
+          echo "x11vnc argv: $CMDLINE"
+
+          echo "$CMDLINE" | grep -q -- '-passwdfile' || {
+            echo "FAIL: -passwdfile missing — the auth branch was not taken"
+            exit 1
+          }
+          if echo "$CMDLINE" | grep -q -- '-nopw'; then
+            echo "FAIL: x11vnc started with -nopw despite VNC_AUTH_TOKEN"
+            exit 1
+          fi
+          if echo "$CMDLINE" | grep -q 'testtoken1234'; then
+            echo "FAIL: the token is visible in x11vnc's argv"
+            exit 1
+          fi
+          echo "PASS: token path uses -passwdfile and keeps the token out of argv"
+          docker rm -f gupax-vnc >/dev/null
+          docker volume rm gupax-vnc-data >/dev/null
+
+      - name: TOR_EXPOSE_RPC publishes wallet RPC on the hidden service (review L12)
+        # The default (off) case is asserted elsewhere; the opt-in path was
+        # never exercised.
+        run: |
+          docker volume create gupax-rpc-data >/dev/null
+          docker run -d --name gupax-rpc \
+            --init \
+            --cap-drop=ALL \
+            --cap-add=SETUID --cap-add=SETGID --cap-add=DAC_OVERRIDE \
+            --cap-add=FOWNER --cap-add=CHOWN \
+            -e TOR_ENABLED=true \
+            -e TOR_EXPOSE_RPC=true \
+            -v gupax-rpc-data:/home/miner/.local/share/gupax \
+            gupax-docker:pr-test >/dev/null
+
+          TORRC=/home/miner/.tor/torrc
+          for i in $(seq 1 30); do
+            docker exec gupax-rpc test -f "$TORRC" && break
+            if [ "$i" -eq 30 ]; then
+              echo "FAIL: torrc was never written"
+              docker logs gupax-rpc
+              exit 1
+            fi
+            sleep 2
+          done
+
+          docker exec gupax-rpc cat "$TORRC"
+          docker exec gupax-rpc grep -q 'HiddenServicePort 18081 127.0.0.1:18081' "$TORRC" || {
+            echo "FAIL: TOR_EXPOSE_RPC=true did not publish 18081"
+            exit 1
+          }
+          docker logs gupax-rpc 2>&1 | grep -q 'TOR_EXPOSE_RPC=true' || {
+            echo "FAIL: the opt-in warning was not logged"
+            exit 1
+          }
+          echo "PASS: opt-in hidden-service RPC is published and warned about"
+          docker rm -f gupax-rpc >/dev/null
+          docker volume rm gupax-rpc-data >/dev/null
+
       - name: Dump logs on failure
         if: failure()
         run: docker logs gupax-test
@@ -460,5 +543,5 @@ jobs:
       - name: Cleanup
         if: always()
         run: |
-          docker rm -f gupax-test gupax-badpuid 2>/dev/null || true
-          docker volume rm gupax-ci-data 2>/dev/null || true
+          docker rm -f gupax-test gupax-badpuid gupax-vnc gupax-rpc 2>/dev/null || true
+          docker volume rm gupax-ci-data gupax-vnc-data gupax-rpc-data 2>/dev/null || true

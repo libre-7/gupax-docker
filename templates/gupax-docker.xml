@@ -55,7 +55,7 @@
   <Deploy>
     <Resources>
       <Limit>
-        <Memory>4096000</Memory>
+        <Memory>6144000</Memory>
         <CPU>2</CPU>
       </Limit>
     </Resources>
@@ -100,6 +100,8 @@
 - Monero RPC (18081) is now documented as **optional**: monerod binds loopback
   by default, so publishing the port does nothing unless you deliberately rebind
   RPC and pass `--confirm-external-bind`.
+- Memory limit raised from 4GB to 6GB: XMRig's RandomX dataset plus monerod
+  during sync did not fit in 4GB and produced OOM kills (exit 137).
   </Changes>
 
 </Container>

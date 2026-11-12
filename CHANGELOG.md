@@ -83,6 +83,16 @@ reference; a same-day rebuild can replace the plain date tag.
   (review L14) — it now compares the README and `templates/README` port tables
   line for line, asserts the Tor version is parsed from the Dockerfile rather
   than hardcoded, and checks every probe timeout.
+- **The VNC token and `TOR_EXPOSE_RPC=true` paths were untested** (review L11,
+  L12) — CI only ever ran the no-auth VNC branch and the RPC-off default. Two
+  new smoke steps assert that the token path uses `-passwdfile` without putting
+  the token in argv, and that the opt-in hidden-service RPC is published and
+  warned about.
+- **The 4 GB memory limit was below the stack's working set** (review M2) —
+  XMRig's RandomX dataset (~2.1 GB plus scratchpad), monerod during sync and the
+  X stack do not fit, so the container could be OOM-killed as 137. Raised to
+  6 GB in compose and the Unraid template. The figure is a footprint-based
+  estimate, not a measured peak; the docs say to confirm with `docker stats`.
 
 ### Documented
 
