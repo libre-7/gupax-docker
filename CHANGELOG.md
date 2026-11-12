@@ -116,6 +116,13 @@ reference; a same-day rebuild can replace the plain date tag.
   not cover either, and only a full `--proxy` makes monerod disable both
   (`--proxy-allow-dns-leaks` overrides that). The README no longer implies that
   switching the toggle off makes monerod's DNS private.
+- **A branch build could never pass its own digest check** (review L20, found by
+  running it) — the publish workflow verifies the pushed image by inspecting
+  `:<commit-sha>`, but that tag is only created on `main`; every other ref pushes
+  `:<ref>-<sha>`. A `workflow_dispatch` build from a branch therefore compared
+  two empty digests and failed *after* successfully pushing the image. The
+  verification tag is now computed alongside the tag list, and a branch build no
+  longer rewrites the public Docker Hub description.
 
 ### Documented
 

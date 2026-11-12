@@ -118,12 +118,24 @@ jobs:
           fi
           echo "Tags:"
           echo "$TAGS"
+
+          # The tag the digest verification compares. main pushes a bare :<sha>;
+          # any other ref pushes :<safe-ref>-<sha> and no bare sha tag, so the
+          # verify step used to inspect a tag that was never created and compare
+          # two empty digests (#review L20).
+          if [ "${{ github.ref_name }}" = "main" ]; then
+            VERIFY_TAG="${{ github.sha }}"
+          else
+            VERIFY_TAG="${SAFE_REF}-${{ github.sha }}"
+          fi
+          echo "Digest verification tag: $VERIFY_TAG"
           # Step outputs are the only reliable way to pass these to `with:`;
           # GITHUB_ENV values are not guaranteed to appear in the env context.
           {
             echo "version=$VERSION"
             echo "asset=$GUPAX_ASSET"
             echo "sha256=$PINNED_SHA"
+            echo "verify_tag=$VERIFY_TAG"
             echo "tags<<EOF"
             echo "$TAGS"
             echo "EOF"
@@ -158,12 +170,19 @@ jobs:
 
       - name: Verify both registries serve the same digest
         # This is what makes "identical image" a checked property instead of a
-        # comment. The commit tag is immutable, so comparing it is meaningful.
+        # comment. The tag compared is the one this run actually pushed: a bare
+        # :<sha> on main, :<ref>-<sha> on any other ref (#review L20).
         run: |
+          VERIFY_TAG="${{ steps.version.outputs.verify_tag }}"
+          if [ -z "$VERIFY_TAG" ]; then
+            echo "FAIL: the version step produced no verification tag"
+            exit 1
+          fi
+          echo "Verifying tag: $VERIFY_TAG"
           GHCR_DIGEST=$(docker buildx imagetools inspect \
-            "${GHCR_IMAGE}:${{ github.sha }}" --format '{{json .Manifest.Digest}}' | tr -d '"')
+            "${GHCR_IMAGE}:${VERIFY_TAG}" --format '{{json .Manifest.Digest}}' | tr -d '"')
           HUB_DIGEST=$(docker buildx imagetools inspect \
-            "${DOCKERHUB_IMAGE}:${{ github.sha }}" --format '{{json .Manifest.Digest}}' | tr -d '"')
+            "${DOCKERHUB_IMAGE}:${VERIFY_TAG}" --format '{{json .Manifest.Digest}}' | tr -d '"')
           echo "GHCR:       $GHCR_DIGEST"
           echo "Docker Hub: $HUB_DIGEST"
           if [ -z "$GHCR_DIGEST" ] || [ "$GHCR_DIGEST" != "$HUB_DIGEST" ]; then
@@ -177,8 +196,9 @@ jobs:
         # artifacts with no automatic propagation. Syncing on every main push
         # makes drift self-healing instead of a perpetual manual chore.
         #
-        # `continue-on-error` on purpose: the image is already pushed at this
-        # point, and a description-sync failure must not turn a good build red.
+        # Only main: a branch build must not rewrite the public description with
+        # branch content.
+        if: github.ref_name == 'main'
         continue-on-error: true
         env:
           DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
