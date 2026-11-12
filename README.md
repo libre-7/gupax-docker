@@ -178,7 +178,7 @@ You'll see output like:
 --restricted-rpc --tx-proxy=tor,127.0.0.1:9050 --anonymous-inbound=dqwj5fyc...onion:18084,127.0.0.1:18086,40
 ```
 
-The complete Start options line should look like this. **Do not add `--enable-dns-blocklist` when Tor is enabled** — it resolves seed-node DNS over clearnet via `libunbound`, not through the Tor SOCKS proxy, which leaks exactly the kind of metadata this setup exists to hide (see [#14](https://github.com/libre-7/gupax-docker/issues/14)):
+The complete Start options line should look like this. **Do not add `--enable-dns-blocklist` when Tor is enabled** — it makes monerod fetch TXT records from `blocklist.moneropulse.*` through the system resolver (`libunbound` reading `/etc/resolv.conf`), not through the Tor SOCKS proxy, which leaks exactly the kind of metadata this setup exists to hide (see [#14](https://github.com/libre-7/gupax-docker/issues/14)):
 
 ```
 --data-dir /home/miner/.bitmonero --zmq-pub tcp://127.0.0.1:18083 --rpc-bind-ip 127.0.0.1 --rpc-bind-port 18081 --out-peers 8 --in-peers 16 --log-level 0 --sync-pruned-blocks --prune-blockchain --restricted-rpc --tx-proxy=tor,127.0.0.1:9050 --anonymous-inbound=dqwj5fyc...onion:18084,127.0.0.1:18086,40
@@ -186,8 +186,16 @@ The complete Start options line should look like this. **Do not add `--enable-dn
 
 > **The DNS blocklist is also a toggle.** Gupax exposes the same flag as a
 > **DNS blocklist** switch on the Node tab. Leave it **off** while Tor is
-> enabled — the container cannot switch it off for you, and it resolves
-> seed-node DNS over clearnet (see [#14](https://github.com/libre-7/gupax-docker/issues/14)).
+> enabled — the container cannot switch it off for you, and its TXT lookups go
+> over clearnet DNS (see [#14](https://github.com/libre-7/gupax-docker/issues/14)).
+>
+> **Turning it off does not make monerod's DNS private.** `--tx-proxy` only
+> proxies transactions; monerod still resolves its DNS **seed nodes** over
+> clearnet. Only a full `--proxy 127.0.0.1:9050` makes monerod disable both the
+> seed lookups and the blocklist (`--proxy-allow-dns-leaks` overrides that), and
+> that routes all P2P through Tor, which this project argues against for
+> bandwidth reasons. Treat "DNS is private" and "transactions are private" as
+> separate properties.
 
 **6. Click Save** (Gupax does not auto-save — if you skip this, the arguments are lost on restart)
 

@@ -109,6 +109,13 @@ reference; a same-day rebuild can replace the plain date tag.
   `/tmp/runtime-<PUID>` (0700, owned by the runtime UID) and exports it. Root
   still reaches it through `DAC_OVERRIDE`, which the capability profile includes.
   Both are best-effort: if a directory cannot be created, startup is unchanged.
+- **The DNS-blocklist warning misattributed the lookup** (verified against the
+  monerod source) — `--enable-dns-blocklist` fetches **TXT** records from
+  `blocklist.moneropulse.*` through the system resolver; it does not resolve
+  seed nodes. Seed-node DNS is a separate clearnet lookup that `--tx-proxy` does
+  not cover either, and only a full `--proxy` makes monerod disable both
+  (`--proxy-allow-dns-leaks` overrides that). The README no longer implies that
+  switching the toggle off makes monerod's DNS private.
 
 ### Documented
 
