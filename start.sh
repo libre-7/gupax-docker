@@ -88,6 +88,10 @@ cleanup() {
 # cannot see through because the command is a quoted string.
 # shellcheck disable=SC2329
 on_stop_signal() {
+    # A second signal while teardown is already running must not abort it: the
+    # re-entrant call would return from the CLEANED guard and then `exit 0`,
+    # cutting the outer teardown short and leaving services running.
+    [ "$CLEANED" -eq 0 ] || return 0
     echo ""
     echo "[*] Received SIG$1 — stopping"
     cleanup

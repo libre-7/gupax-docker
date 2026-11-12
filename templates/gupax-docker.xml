@@ -101,7 +101,7 @@
   by default, so publishing the port does nothing unless you deliberately rebind
   RPC and pass `--confirm-external-bind`.
 - Memory limit raised from 4GB to 6GB: XMRig's RandomX dataset plus monerod
-  during sync did not fit in 4GB and produced OOM kills (exit 137).
+  during sync does not fit in 4GB, so the stack can be OOM-killed (exit 137).
   </Changes>
 
 </Container>

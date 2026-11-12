@@ -59,8 +59,8 @@ services:
           # Component footprints: XMRig's RandomX dataset is ~2.1 GB plus
           # 256 MB/thread scratchpad (2 threads ~= 2.6 GB), monerod needs
           # 1-1.5 GB during sync, and P2Pool + Xvfb + Gupax add ~0.5 GB.
-          # 4G left no headroom and OOM-killed the stack as 137, which reads
-          # like a crash. This is an estimate from those footprints, not a
+          # 4G leaves no headroom, so the stack can be OOM-killed as 137, which
+          # reads like a crash. This is an estimate from those footprints, not a
           # measured peak: confirm with `docker stats` on a syncing node.
           memory: 6G
         reservations:

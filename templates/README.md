@@ -87,7 +87,7 @@ If you already have a Monero blockchain synced:
 
 ## Resource Limits
 
-The template sets recommended limits of **6GB RAM** and **2 CPU cores**. 4GB left no headroom for XMRig's RandomX dataset (~2.1 GB) plus monerod during sync, and produced OOM kills (exit 137). The 6GB figure is an estimate from the component footprints — measure with `docker stats` on your own node before tightening it.
+The template sets recommended limits of **6GB RAM** and **2 CPU cores**. 4GB leaves no headroom for XMRig's RandomX dataset (~2.1 GB) plus monerod during sync, and can produce OOM kills (exit 137). The 6GB figure is an estimate from the component footprints — measure with `docker stats` on your own node before tightening it.
 
 ## Submitting to Community Applications
 

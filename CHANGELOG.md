@@ -39,7 +39,8 @@ reference; a same-day rebuild can replace the plain date tag.
   shutdown sequence. `cleanup` is now idempotent, and the signal path exits 0
   with an explicit `Received SIGTERM` line; Gupax's own exit code still
   propagates when it dies by itself. The README's description of the log order
-  was inverted and is corrected (review L4).
+  was inverted and is corrected (review L4). A second signal arriving during
+  teardown is now ignored rather than aborting the first one halfway.
 - **The GitHub token was visible in `curl`'s argv** (review L9) — the release
   detector passed `Authorization: Bearer …` as a command-line argument, which is
   world-readable in `/proc/<pid>/cmdline` and contradicts this project's own
