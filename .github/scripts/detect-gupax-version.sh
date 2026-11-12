@@ -30,10 +30,19 @@
 set -euo pipefail
 
 API_URL="https://api.github.com/repos/gupax-io/gupax/releases"
-AUTH_ARGS=()
-if [ -n "${GITHUB_TOKEN:-}" ]; then
-    AUTH_ARGS=(-H "Authorization: Bearer ${GITHUB_TOKEN}")
-fi
+
+# The token is passed as a header read from stdin, never on the command line:
+# curl's argv is world-readable in /proc/<pid>/cmdline, and this project's own
+# rule is that secrets do not go there. GitHub tokens are [A-Za-z0-9_], so the
+# header needs no further escaping.
+gh_api() {
+    if [ -n "${GITHUB_TOKEN:-}" ]; then
+        printf 'Authorization: Bearer %s\n' "$GITHUB_TOKEN" \
+            | curl -fsSL -H @- "$1"
+    else
+        curl -fsSL "$1"
+    fi
+}
 
 # Fail fast on API errors instead of half-parsing a rate-limit page.
 # per_page=100: every upstream release in one request, so old releases can
@@ -48,7 +57,7 @@ if [ -n "${GUPAX_RELEASES_FILE:-}" ]; then
         exit 1
     }
 else
-    RESPONSE=$(curl -fsSL "${AUTH_ARGS[@]}" "${API_URL}?per_page=100") || {
+    RESPONSE=$(gh_api "${API_URL}?per_page=100") || {
         echo "ERROR: GitHub API request failed" >&2
         exit 1
     }

@@ -6,9 +6,9 @@
 .git
 .gitignore
 
-# Documentation and non-build inputs
+# Documentation and non-build inputs. LICENSE and NOTICE are deliberately NOT
+# listed here: they are copied into the image so the GPL text travels with it.
 README.md
-LICENSE
 
 # Docker
 docker-compose.yml

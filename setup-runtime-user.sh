@@ -22,8 +22,10 @@
 set -e
 set -o pipefail
 
-PUID=${PUID:-999}
-PGID=${PGID:-999}
+# Default to the image's `miner` account rather than a literal UID: the
+# Dockerfile creates it with `useradd -r`, so the number is not contractual.
+PUID=${PUID:-$(id -u miner 2>/dev/null || echo 999)}
+PGID=${PGID:-$(id -g miner 2>/dev/null || echo 999)}
 
 die() {
     echo "[ERROR] $*" >&2

@@ -1,7 +1,6 @@
 <img src="https://raw.githubusercontent.com/gupax-io/gupax/main/assets/images/banner.png" width="600">
 
 [![Build Status](https://img.shields.io/github/actions/workflow/status/libre-7/gupax-docker/docker-publish.yml?branch=main&style=flat-square&logo=github&label=build)](https://github.com/libre-7/gupax-docker/actions)
-[![Docker Hub Build](https://img.shields.io/github/actions/workflow/status/libre-7/gupax-docker/docker-hub-push.yml?branch=main&style=flat-square&logo=docker&label=dockerhub)](https://github.com/libre-7/gupax-docker/actions/workflows/docker-hub-push.yml)
 [![License](https://img.shields.io/github/license/libre-7/gupax-docker?style=flat-square&color=blue)](https://github.com/libre-7/gupax-docker/blob/main/LICENSE)
 [![Docker Hub](https://img.shields.io/docker/pulls/libre7/gupax-docker?style=flat-square&color=blue&logo=docker)](https://hub.docker.com/r/libre7/gupax-docker)
 [![Image Size](https://img.shields.io/docker/image-size/libre7/gupax-docker/latest?style=flat-square&logo=docker&color=blueviolet)](https://hub.docker.com/r/libre7/gupax-docker)
@@ -20,7 +19,7 @@
 | 🖥️ Gupax GUI | Full graphical interface for P2Pool + XMRig mining |
 | 🔗 Decentralized mining | P2Pool provides trustless, decentralized Monero mining |
 | 💾 Persistent config | Gupax settings persist across container restarts |
-| 🔄 Auto-restart | Container restarts automatically on failure |
+| 🔄 Restart on exit | `restart: unless-stopped` restarts the container when Gupax **exits**. A hung GUI (container `Up`, health `unhealthy`) is reported by the health check, not auto-restarted |
 | 📊 Mining dashboard | Real-time hashrate, shares, payouts, and node status |
 | 🔧 XMRig proxy | Built-in proxy for connecting external miners |
 | 🧅 Tor hidden service | Optional — expose your node as a `.onion` for private transactions |
@@ -173,7 +172,7 @@ You'll see output like:
 
 > **Why this matters:** Every time you click "Reset to Advanced options" or switch between Simple/Advanced modes, Gupax resets `--data-dir` back to `.bitmonero`. If left as the relative path, monerod will fail to find the blockchain and exit immediately. You must manually correct this each time the options are reset.
 
-**5. Paste the four Tor arguments** from the log output (after the `--data-dir` fix):
+**5. Paste the three Tor arguments** from the log output (after the `--data-dir` fix):
 
 ```
 --restricted-rpc --tx-proxy=tor,127.0.0.1:9050 --anonymous-inbound=dqwj5fyc...onion:18084,127.0.0.1:18086,40
@@ -184,6 +183,11 @@ The complete Start options line should look like this. **Do not add `--enable-dn
 ```
 --data-dir /home/miner/.bitmonero --zmq-pub tcp://127.0.0.1:18083 --rpc-bind-ip 127.0.0.1 --rpc-bind-port 18081 --out-peers 8 --in-peers 16 --log-level 0 --sync-pruned-blocks --prune-blockchain --restricted-rpc --tx-proxy=tor,127.0.0.1:9050 --anonymous-inbound=dqwj5fyc...onion:18084,127.0.0.1:18086,40
 ```
+
+> **The DNS blocklist is also a toggle.** Gupax exposes the same flag as a
+> **DNS blocklist** switch on the Node tab. Leave it **off** while Tor is
+> enabled — the container cannot switch it off for you, and it resolves
+> seed-node DNS over clearnet (see [#14](https://github.com/libre-7/gupax-docker/issues/14)).
 
 **6. Click Save** (Gupax does not auto-save — if you skip this, the arguments are lost on restart)
 
@@ -327,7 +331,7 @@ If you have an existing Monero blockchain on your Unraid server:
 | `3333` | P2Pool | Mining | ✅ **Yes** | Stratum — external miners connect here |
 | `37889` | P2Pool | Mining | ✅ **Yes** | P2P — p2pool peer connections |
 | `18080` | monerod | Node | ✅ **Yes** | P2P network — connects to other Monero nodes |
-| `18081` | monerod | Node | ✅ **Yes** | RPC — JSON-RPC API for Gupax and wallets |
+| `18081` | monerod | Node | ⚠️ **Optional** | RPC — Gupax and P2Pool reach it over loopback inside the container. monerod binds `127.0.0.1` by default, so publishing the port does nothing unless you also pass `--rpc-bind-ip 0.0.0.0 --confirm-external-bind --restricted-rpc` |
 | `18083` | monerod | Node | — | ZMQ pub — block notifications for P2Pool (loopback only, `--zmq-pub` flag) |
 | `18084` | Tor HS | Tor | — | Hidden service virtual port (Tor routes this internally) |
 | `18086` | monerod | Tor | — | `--anonymous-inbound` bind target (Tor routes this internally) |

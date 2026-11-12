@@ -26,7 +26,7 @@
 
 - [x] **Non-root user** — Gupax runs as a non-root user via `gosu` (default UID 999; `PUID`/`PGID` override). CI asserts this on every PR.
 - [x] **Version pinning** — The Gupax tarball is verified against an in-repo SHA256 pin (`gupax-checksums.txt`); the upstream SHA256SUMS is a secondary, same-origin check. ⚠️ The P2Pool/XMRig/monerod binaries Gupax downloads at **runtime** are not checksum-verified by this image.
-- [x] **Automatic restart** — `restart: unless-stopped` in compose
+- [x] **Restart on exit** — `restart: unless-stopped` in compose. It acts on exit only: a hung GUI (container `Up`, health `unhealthy`) is reported by the health check, not auto-restarted
 - [x] **VNC password** — Optional password protection for noVNC interface
 - [ ] **Read-only root filesystem** — Mark image as `read_only: true` where possible
 - [ ] **Monitoring integration** — Optional Prometheus metrics if Gupax exposes them

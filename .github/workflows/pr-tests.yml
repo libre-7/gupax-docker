@@ -192,13 +192,15 @@ jobs:
           echo "PASS: Gupax is non-root (UID $GUPAX_UID)"
 
       - name: Verify the gupax group exists on the default UID path (GUP-01)
-        # The original bug: UID 999 already exists as `miner`, so the whole
+        # The original bug: the default UID already existed as `miner`, so the
         # user-creation block was skipped and no gupax group was created.
+        # Assert against the `miner` account, not a literal 999 — the image
+        # creates it with `useradd -r`, so its UID is not contractual.
         run: |
           docker exec gupax-test getent group gupax
           docker exec gupax-test bash -c \
-            'id -nG "$(getent passwd 999 | cut -d: -f1)" | tr " " "\n" | grep -qx gupax'
-          echo "PASS: UID 999 is a member of the gupax group"
+            'id -nG "$(id -un miner)" | tr " " "\n" | grep -qx gupax'
+          echo "PASS: the default runtime user (miner) is a member of the gupax group"
 
       - name: User setup matrix 999/999, 99/100, 1000/1000 (GUP-01)
         # PUID=99/PGID=100 (Unraid) and PUID=1000/PGID=1000 (typical host user)

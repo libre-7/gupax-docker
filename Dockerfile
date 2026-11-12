@@ -215,6 +215,13 @@ RUN echo '<!DOCTYPE html><html><head><meta http-equiv="refresh" content="0;url=v
 COPY start.sh healthcheck.sh setup-runtime-user.sh tor-bootstrap-check.sh /usr/local/bin/
 RUN chmod +x /usr/local/bin/start.sh /usr/local/bin/healthcheck.sh \
     /usr/local/bin/setup-runtime-user.sh /usr/local/bin/tor-bootstrap-check.sh
+
+# Licence text and attribution notice travel with the image. It redistributes
+# Gupax (GPL-3.0-or-later), and the GPL requires the licence to accompany the
+# distribution; `org.opencontainers.image.licenses` alone is metadata, not the
+# licence. .dockerignore deliberately does not exclude these two files.
+COPY LICENSE NOTICE /usr/share/doc/gupax-docker/
+
 EXPOSE 6080 5900
 EXPOSE 3333 37889 18080 18081
 # Internal-only ports (documented for debugging — not mapped to host)

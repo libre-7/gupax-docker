@@ -40,9 +40,41 @@ reference; a same-day rebuild can replace the plain date tag.
   with an explicit `Received SIGTERM` line; Gupax's own exit code still
   propagates when it dies by itself. The README's description of the log order
   was inverted and is corrected (review L4).
+- **The GitHub token was visible in `curl`'s argv** (review L9) — the release
+  detector passed `Authorization: Bearer …` as a command-line argument, which is
+  world-readable in `/proc/<pid>/cmdline` and contradicts this project's own
+  rule for secrets. The header is now read from stdin with `-H @-`.
+- **A hardcoded UID 999 stood in for the image's `miner` account** (review L10) —
+  the Dockerfile creates `miner` with `useradd -r`, so its UID is allocated, not
+  fixed. `start.sh`, `setup-runtime-user.sh` and the CI default-UID assertion now
+  resolve the account instead of assuming 999.
+- **Debug output shipped in the normal startup log** (review L16) — the `[D]` X
+  keyboard/input dumps now require `GUPAX_DEBUG=true`.
+- **The image redistributed Gupax without its licence text** (review L6) —
+  `LICENSE` and `NOTICE` are now copied to `/usr/share/doc/gupax-docker/` and
+  `.dockerignore` no longer excludes them. The OCI licence label was metadata
+  only, not the licence the GPL requires to accompany a distribution.
 
 ### Documented
 
+- **Port 18081 was documented as "✅ Yes"** (review M4) — monerod binds
+  `127.0.0.1` by default and additionally requires `--confirm-external-bind`
+  before it will bind elsewhere, so publishing the port is inert unless the
+  operator deliberately changes both. The port table, the Unraid template field
+  and the README now say so.
+- **The Docker Hub badge pointed at a manual-only workflow** (review L1) — a
+  status badge on `docker-hub-push.yml` could never show anything, because that
+  workflow has no push trigger. Removed.
+- **"Auto-restart" overclaimed** (review L2) — `restart: unless-stopped` acts on
+  exit only; a hung GUI is reported by the health check, not restarted. README
+  and TODO now say that.
+- **"Paste the four Tor arguments" listed three** (review L3) — corrected.
+- **`ca_profile.xml` read as an orphaned file** (review L5) — kept, and now
+  documented in the file itself and in `templates/README.md` as the maintainer
+  profile staged for the Community Applications PR.
+- **The DNS-blocklist toggle was not named** — the README warned against
+  *adding* `--enable-dns-blocklist` but not against leaving Gupax's Node-tab
+  **DNS blocklist** toggle on while Tor is enabled. Called out explicitly.
 - The Dockerfile comment claiming `TOR_VERSION` and `TOR_KEYRING_SHA256` must
   be "bumped together" was wrong and is corrected: the pins are independent,
   and bumping the keyring hash alongside a Tor release breaks the build.

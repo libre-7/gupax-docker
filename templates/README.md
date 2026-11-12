@@ -56,7 +56,7 @@ The container runs a **noVNC web interface** — no X11 or VNC client needed:
 | `3333` | P2Pool | Mining | ✅ **Yes** | Stratum — external miners connect here |
 | `37889` | P2Pool | Mining | ✅ **Yes** | P2P — p2pool peer connections |
 | `18080` | monerod | Node | ✅ **Yes** | P2P network — connects to other Monero nodes |
-| `18081` | monerod | Node | ✅ **Yes** | RPC — JSON-RPC API for Gupax and wallets |
+| `18081` | monerod | Node | ⚠️ **Optional** | RPC — Gupax and P2Pool reach it over loopback inside the container. monerod binds `127.0.0.1` by default, so publishing the port does nothing unless you also pass `--rpc-bind-ip 0.0.0.0 --confirm-external-bind --restricted-rpc` |
 | `18083` | monerod | Node | — | ZMQ pub — block notifications for P2Pool (loopback only, `--zmq-pub` flag) |
 | `18084` | Tor HS | Tor | — | Hidden service virtual port (Tor routes this internally) |
 | `18086` | monerod | Tor | — | `--anonymous-inbound` bind target (Tor routes this internally) |
@@ -96,3 +96,7 @@ To have this template included in the official Unraid Community Applications sto
 - [selfhosters/unRAID-CA-templates](https://github.com/selfhosters/unRAID-CA-templates)
 
 Include the template XML file and the repository URL in your PR.
+
+The maintainer profile for that submission is `ca_profile.xml` in the repository
+root. It is not part of the image build and is never copied into the container —
+it exists only to accompany the Community Applications PR.

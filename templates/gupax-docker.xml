@@ -46,7 +46,7 @@
   <Config Name="P2Pool Stratum" Target="3333" Type="Port" Default="3333" Description="P2Pool Stratum - Connect external miners here" Mode="tcp" Display="advanced" Required="false" Mask="false"/>
   <Config Name="P2Pool P2P" Target="37889" Type="Port" Default="37889" Description="P2Pool P2P (p2pool peer connections)" Mode="tcp" Display="advanced" Required="false" Mask="false"/>
   <Config Name="Monero P2P" Target="18080" Type="Port" Default="18080" Description="Monero P2P Network" Mode="tcp" Display="advanced" Required="false" Mask="false"/>
-  <Config Name="Monero RPC" Target="18081" Type="Port" Default="18081" Description="Monero RPC" Mode="tcp" Display="advanced" Required="false" Mask="false"/>
+  <Config Name="Monero RPC" Target="18081" Type="Port" Default="18081" Description="Monero RPC. Only needed for an external wallet: monerod binds 127.0.0.1 by default, so this mapping is inert unless you also run it with --rpc-bind-ip 0.0.0.0 --confirm-external-bind --restricted-rpc" Mode="tcp" Display="advanced" Required="false" Mask="false"/>
 
   <Config Name="Gupax config" Target="/home/miner/.local/share/gupax" Type="Path" Default="/mnt/user/appdata/gupax/share" Mode="rw" Description="Gupax configuration, wallet, settings AND downloaded mining binaries (P2Pool, XMRig, monerod) — Gupax stores everything here" Display="always" Required="false" Mask="false"/>
   <Config Name="Monero blockchain" Target="/home/miner/.bitmonero" Type="Path" Default="/mnt/user/appdata/gupax/monero" Mode="rw" Description="Monero blockchain data. In Gupax UI, go to Node tab and set database path to /home/miner/.bitmonero" Display="always" Required="false" Mask="false"/>
@@ -96,6 +96,10 @@
   `--stop-timeout=30` to match docker-compose.yml.
 - `TOR_ENABLED` now states that it only starts the daemon; wallet RPC over the
   .onion is opt-in via `TOR_EXPOSE_RPC`.
+### 2026.11.11
+- Monero RPC (18081) is now documented as **optional**: monerod binds loopback
+  by default, so publishing the port does nothing unless you deliberately rebind
+  RPC and pass `--confirm-external-bind`.
   </Changes>
 
 </Container>

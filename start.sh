@@ -134,14 +134,20 @@ echo "[*] Fixing data directory permissions..."
 # volume stat succeeds and returns 0 — which would run the entire mining
 # stack as root via gosu 0:0. Treat a detected 0 as "unset" and fall back to
 # the image's miner user (useradd -r default) instead.
-_det_uid=$(stat -c '%u' /home/miner/.local/share/gupax 2>/dev/null || echo 999)
-_det_gid=$(stat -c '%g' /home/miner/.local/share/gupax 2>/dev/null || echo 999)
+# The image creates `miner` with `useradd -r`, so its UID is whatever the system
+# range allocates — do not assume 999. Resolve it once; keep 999 only as a
+# last-resort fallback for an image that has no `miner` account.
+MINER_UID=$(id -u miner 2>/dev/null || echo 999)
+MINER_GID=$(id -g miner 2>/dev/null || echo 999)
+
+_det_uid=$(stat -c '%u' /home/miner/.local/share/gupax 2>/dev/null || echo "$MINER_UID")
+_det_gid=$(stat -c '%g' /home/miner/.local/share/gupax 2>/dev/null || echo "$MINER_GID")
 if [ "$_det_uid" = "0" ]; then
-    echo "[!] Data volume is root-owned (fresh Docker volume) — defaulting PUID to 999"
-    _det_uid=999
+    echo "[!] Data volume is root-owned (fresh Docker volume) — defaulting PUID to $MINER_UID (miner)"
+    _det_uid=$MINER_UID
 fi
 if [ "$_det_gid" = "0" ]; then
-    _det_gid=999
+    _det_gid=$MINER_GID
 fi
 PUID=${PUID:-$_det_uid}
 PGID=${PGID:-$_det_gid}
@@ -473,12 +479,15 @@ WEBSOCKIFY_PID=$!
 sleep 2
 xset r on 2>/dev/null || true
 
-# Debug: show X keyboard state
-echo "[D] Keyboard repeat setting:"
-xset q 2>/dev/null | grep -A2 "Keyboard" || echo "[D] xset q failed"
-
-echo "[D] X input devices:"
-xinput list 2>/dev/null || echo "[D] xinput failed"
+# Optional diagnostics for input problems (keyboard ignored, wrong focus).
+# Off by default so the normal startup log stays short; enable with
+# GUPAX_DEBUG=true when troubleshooting.
+if [ "${GUPAX_DEBUG:-false}" = "true" ]; then
+    echo "[D] Keyboard repeat setting:"
+    xset q 2>/dev/null | grep -A2 "Keyboard" || echo "[D] xset q failed"
+    echo "[D] X input devices:"
+    xinput list 2>/dev/null || echo "[D] xinput failed"
+fi
 
 # Verify websockify is running
 if ! kill -0 $WEBSOCKIFY_PID 2>/dev/null; then
