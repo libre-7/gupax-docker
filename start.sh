@@ -10,58 +10,92 @@
 set -e
 set -o pipefail
 
-# Cleanup function — stops all background processes gracefully
+# Stop one background process and wait for it.
+#
+# NEVER call a bare `wait` in teardown: with no operand it waits for *every*
+# child of this script, so a cleanup that runs before a PID variable is
+# assigned (a SIGTERM during startup, including the up-to-75s Tor bootstrap)
+# would block on a still-running service until Docker SIGKILLs the container
+# (#review H1).
+#
+#   $1 = PID (may be empty; then this is a no-op)
+#   $2 = optional user[:group] to signal as. CAP_KILL is dropped in the shipped
+#        capability profile, so root cannot signal Gupax (PUID) or Tor
+#        (debian-tor) directly — a same-UID signal needs no capability.
+stop_pid() {
+    local pid="${1:-}" run_as="${2:-}"
+    [ -n "$pid" ] || return 0
+    if [ -n "$run_as" ] && command -v gosu >/dev/null 2>&1; then
+        gosu "$run_as" kill "$pid" 2>/dev/null || kill "$pid" 2>/dev/null || true
+    else
+        kill "$pid" 2>/dev/null || true
+    fi
+    wait "$pid" 2>/dev/null || true
+}
+
+# Cleanup function — stops all background processes gracefully.
+#
+# Idempotent on purpose: the signal path and the normal exit path both call it,
+# and running teardown twice printed a duplicate shutdown sequence for no
+# benefit (#review M1).
+CLEANED=0
 cleanup() {
+    [ "$CLEANED" -eq 0 ] || return 0
+    CLEANED=1
+
     echo ""
     echo "[*] Shutting down..."
-    # CAP_KILL is dropped in the shipped capability profile. Root can signal
-    # processes it owns, but not Gupax (UID $PUID) or Tor (debian-tor). Signal
-    # as the owning user; same-UID signals need no capability.
-    echo "[*] Stopping Gupax..."
-    if [ -n "$GUPAX_PID" ]; then
-        if [ -n "$PUID" ] && [ "$PUID" != "0" ] && command -v gosu >/dev/null 2>&1; then
-            gosu "$PUID:$PGID" kill "$GUPAX_PID" 2>/dev/null || kill "$GUPAX_PID" 2>/dev/null || true
-        else
-            kill "$GUPAX_PID" 2>/dev/null || true
-        fi
-        wait "$GUPAX_PID" 2>/dev/null || true
+
+    # Resolve the identity Gupax runs as, once. PUID/PGID can be unset if the
+    # signal arrives before start.sh assigned them.
+    local gupax_id=""
+    if [ -n "${PUID:-}" ] && [ -n "${PGID:-}" ] && [ "$PUID" != "0" ]; then
+        gupax_id="$PUID:$PGID"
     fi
+
+    echo "[*] Stopping Gupax..."
+    stop_pid "${GUPAX_PID:-}" "$gupax_id"
     echo "[*] Stopping xdg-desktop-portal..."
-    kill $PORTAL_PID 2>/dev/null || true
-    wait $PORTAL_PID 2>/dev/null || true
+    stop_pid "${PORTAL_PID:-}"
     echo "[*] Stopping D-Bus session..."
-    kill "$DBUS_SESSION_BUS_PID" 2>/dev/null || true
-    wait "$DBUS_SESSION_BUS_PID" 2>/dev/null || true
+    stop_pid "${DBUS_SESSION_BUS_PID:-}"
     echo "[*] Stopping websockify..."
-    kill $WEBSOCKIFY_PID 2>/dev/null || true
-    wait $WEBSOCKIFY_PID 2>/dev/null || true
+    stop_pid "${WEBSOCKIFY_PID:-}"
     echo "[*] Stopping x11vnc..."
-    kill $X11VNC_PID 2>/dev/null || true
-    wait $X11VNC_PID 2>/dev/null || true
+    stop_pid "${X11VNC_PID:-}"
     # Belt-and-suspenders: remove the password temp file on shutdown
     # in case it wasn't cleaned up during startup (e.g., container was killed
     # before the startup-time rm could execute).
-    [ -n "$X11VNC_PASSFILE" ] && rm -f "$X11VNC_PASSFILE"
-    echo "[*] Stopping openbox..."
-    kill $OPENBOX_PID 2>/dev/null || true
-    wait $OPENBOX_PID 2>/dev/null || true
-    echo "[*] Stopping Tor..."
-    if [ -n "$TOR_PID" ]; then
-        if [ -n "${TOR_RUN_USER:-}" ]; then
-            gosu "$TOR_RUN_USER" kill "$TOR_PID" 2>/dev/null || kill "$TOR_PID" 2>/dev/null || true
-        else
-            kill "$TOR_PID" 2>/dev/null || true
-        fi
-        wait "$TOR_PID" 2>/dev/null || true
+    if [ -n "${X11VNC_PASSFILE:-}" ]; then
+        rm -f "$X11VNC_PASSFILE"
     fi
+    echo "[*] Stopping openbox..."
+    stop_pid "${OPENBOX_PID:-}"
+    echo "[*] Stopping Tor..."
+    stop_pid "${TOR_PID:-}" "${TOR_RUN_USER:-}"
     echo "[*] Stopping Xvfb..."
-    kill $XVFB_PID 2>/dev/null || true
-    wait $XVFB_PID 2>/dev/null || true
+    stop_pid "${XVFB_PID:-}"
     echo "[+] Shutdown complete"
 }
 
-# Register signal handlers for graceful shutdown
-trap cleanup SIGTERM SIGINT SIGQUIT
+# A requested stop is not a crash. Tear down once, then exit 0 so `docker stop`
+# and `docker compose down` are not recorded as 143 — a code that is
+# indistinguishable from a crash in `docker inspect` and in the logs (#review
+# M1). Gupax's own exit code still propagates on the normal path at the end of
+# this script.
+#
+# SC2329: only reachable through the trap handlers below, which ShellCheck
+# cannot see through because the command is a quoted string.
+# shellcheck disable=SC2329
+on_stop_signal() {
+    echo ""
+    echo "[*] Received SIG$1 — stopping"
+    cleanup
+    exit 0
+}
+trap 'on_stop_signal TERM' SIGTERM
+trap 'on_stop_signal INT' SIGINT
+trap 'on_stop_signal QUIT' SIGQUIT
 
 echo "============================================="
 echo "  Gupax-docker — Starting noVNC + Gupax"
@@ -513,6 +547,9 @@ wait $GUPAX_PID
 EXIT_CODE=$?
 set -e
 
+# Reached only when Gupax exited on its own (crash, or Quit from the GUI). A
+# requested stop exits from the signal handler above and never gets here, so
+# this path is the one that reports a real exit code.
 echo ""
 echo "[*] Gupax exited (code: $EXIT_CODE)"
 cleanup

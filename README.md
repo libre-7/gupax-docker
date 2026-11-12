@@ -519,9 +519,12 @@ docker compose logs
 ```
 
 A repeated crash-and-restart loop is usually Gupax itself exiting. The exit
-code is propagated, so `[+] Shutdown complete` followed by `Gupax exited
-(code: N)` tells you what it returned. If it exits immediately after start,
-the usual cause is a volume ownership problem — see
+code is propagated, so a crash ends the log with `[*] Gupax exited (code: N)`
+followed by the teardown lines and `[+] Shutdown complete` — `N` is Gupax's own
+return code (for example `137` for an OOM kill). A stop you asked for is not a
+crash: `docker stop` / `docker compose down` prints `[*] Received SIGTERM —
+stopping`, tears down once, and exits `0`. If Gupax exits immediately after
+start, the usual cause is a volume ownership problem — see
 [Ownership Requirements](#ownership-requirements-for-existing-blockchain-files).
 
 ### P2Pool spamming `empty response` / `EBADF` errors

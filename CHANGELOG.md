@@ -24,6 +24,22 @@ reference; a same-day rebuild can replace the plain date tag.
   compared the container's Tor against a hardcoded `0.4.9.14`, so bumping the
   Dockerfile alone left CI red. The assertion now reads `ARG TOR_VERSION` from
   the Dockerfile, making the pin single-source.
+- **Teardown hung when a stop arrived during startup** (review H1) — `cleanup()`
+  waited on six services with `wait "$VAR"`. When a PID variable was still
+  unset (a SIGTERM during the up-to-75s Tor bootstrap, or before
+  Xvfb/websockify/portal started), the empty expansion turned that into a bare
+  `wait`, which waits for **every** child of the script — so teardown blocked on
+  a live service, burned the full `stop_grace_period`, and the container was
+  SIGKILLed and recorded as 137, which reads exactly like an OOM kill. All six
+  teardowns now run through `stop_pid`, which returns immediately on an empty
+  PID.
+- **A graceful stop was recorded as exit 143 and tore down twice** (review M1) —
+  the signal trap ran `cleanup`, then the main path ran it again and exited
+  with 143, so every `docker stop` looked like a crash and printed a duplicate
+  shutdown sequence. `cleanup` is now idempotent, and the signal path exits 0
+  with an explicit `Received SIGTERM` line; Gupax's own exit code still
+  propagates when it dies by itself. The README's description of the log order
+  was inverted and is corrected (review L4).
 
 ### Documented
 
