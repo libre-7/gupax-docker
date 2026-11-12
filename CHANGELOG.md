@@ -98,6 +98,17 @@ reference; a same-day rebuild can replace the plain date tag.
   ignored SC2046, which only applies to an *unquoted* command substitution. The
   Dockerfile has two, both quoted or assignments, so the ignore was dead weight
   that would have hidden the first real one. Removed.
+- **Gupax could not write its shader cache** (live log evidence) — `useradd -m`
+  creates `/home/miner` as 0750 owned by `miner`, and `start.sh` only widens it
+  to 0755 (traversable, not writable). With the Unraid default `PUID=99` Gupax
+  logged `Failed to create /home/miner/.cache for shader cache (Permission
+  denied)--disabling` and recompiled shaders on every start. `start.sh` now
+  creates `~/.cache` owned by the runtime UID.
+- **`XDG_RUNTIME_DIR` was never set** (live log evidence) — Gupax logged
+  `error: XDG_RUNTIME_DIR is not set in the environment`. `start.sh` now creates
+  `/tmp/runtime-<PUID>` (0700, owned by the runtime UID) and exports it. Root
+  still reaches it through `DAC_OVERRIDE`, which the capability profile includes.
+  Both are best-effort: if a directory cannot be created, startup is unchanged.
 
 ### Documented
 

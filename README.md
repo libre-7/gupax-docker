@@ -502,6 +502,22 @@ If a restart doesn't help, the X stack is usually the culprit. Common causes:
   is heavy and can stall the browser's canvas. Drop to `1920x1080x24` and
   retry.
 
+### Warnings in the log that are safe to ignore
+
+Not every line in `docker logs` is a fault. These are expected:
+
+| Line | Why |
+|---|---|
+| `JSONRPCRequest uv_poll_start returned error EBADF` / `P2Pool get_info RPC … Error (empty response)` | P2Pool starts before monerod has opened its RPC port; they stop within seconds of monerod answering. **If they persist, monerod is not running** — check the Node tab |
+| `RandomX_Hasher couldn't allocate RandomX … using large pages` | No hugepages in the container. Slower hashing, not an error |
+| `Util uPnPDiscover: no UPnP IGD devices found` | Docker has no UPnP gateway; ports are published by Docker instead |
+| `P2PServer peer <ip> banned for N seconds` | P2Pool banning a misbehaving peer |
+| `webSocketsHandshake: unknown connection error` | The noVNC client reconnecting; one every ~30 s is normal |
+| `Failed to create /home/miner/.cache for shader cache` / `error: XDG_RUNTIME_DIR is not set` | This build creates both directories; images older than it recompile shaders on each start |
+
+P2Pool logs **UTC** while websockify logs local time, so a six-hour offset between
+their timestamps is not a clock fault.
+
 ### Connection refused on port 6080
 
 Make sure the container is running:

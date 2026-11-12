@@ -465,6 +465,7 @@ jobs:
             --cap-add=SETUID --cap-add=SETGID --cap-add=DAC_OVERRIDE \
             --cap-add=FOWNER --cap-add=CHOWN \
             -e VNC_AUTH_TOKEN=testtoken1234 \
+            -e PUID=99 -e PGID=100 \
             -v gupax-vnc-data:/home/miner/.local/share/gupax \
             gupax-docker:pr-test >/dev/null
 
@@ -494,6 +495,22 @@ jobs:
             exit 1
           fi
           echo "PASS: token path uses -passwdfile and keeps the token out of argv"
+
+          # Same container, non-miner UID: the shader cache and XDG runtime dir
+          # must be writable by PUID, not just present. This is the Unraid 99:100
+          # case that produced "Failed to create /home/miner/.cache for shader
+          # cache (Permission denied)" and the XDG_RUNTIME_DIR warning.
+          docker exec gupax-vnc gosu 99:100 test -w /home/miner/.cache || {
+            echo "FAIL: /home/miner/.cache is not writable by PUID 99"
+            exit 1
+          }
+          docker exec gupax-vnc gosu 99:100 test -w /tmp/runtime-99 || {
+            echo "FAIL: XDG_RUNTIME_DIR is not writable by PUID 99"
+            exit 1
+          }
+          docker exec gupax-vnc stat -c '%n %a %u:%g' /home/miner/.cache /tmp/runtime-99
+          echo "PASS: cache and runtime dirs are writable by a non-miner PUID"
+
           docker rm -f gupax-vnc >/dev/null
           docker volume rm gupax-vnc-data >/dev/null
 

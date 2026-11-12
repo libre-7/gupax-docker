@@ -206,6 +206,36 @@ else
     chmod u+rwX,go+rX /home/miner/.bitmonero 2>/dev/null || true
 fi
 
+# Runtime directories Gupax and the portal expect, which the image does not
+# create. Both failures are visible in the log but harmless to correctness, so
+# they are best-effort: if a directory cannot be made, startup continues exactly
+# as it did before.
+#
+#   ~/.cache — wgpu writes its shader cache there. `useradd -m` creates
+#   /home/miner as 0750 owned by miner, and the chmod above widens it to 0755:
+#   traversable, not writable. When PUID is not the image's `miner` account (the
+#   normal Unraid 99:100 case) Gupax cannot create it and logs
+#     "Failed to create /home/miner/.cache for shader cache (Permission denied)".
+#
+#   XDG_RUNTIME_DIR — required by GTK/zbus/portal clients; the spec wants it mode
+#   0700 owned by the user. Without it Gupax logs
+#     "error: XDG_RUNTIME_DIR is not set in the environment".
+#   Root still reaches a 0700 directory through DAC_OVERRIDE, which the shipped
+#   capability profile includes.
+GUPAX_CACHE_DIR=/home/miner/.cache
+if mkdir -p "$GUPAX_CACHE_DIR" 2>/dev/null; then
+    chown "$PUID:$PGID" "$GUPAX_CACHE_DIR" 2>/dev/null || true
+    chmod u+rwX,go-rwx "$GUPAX_CACHE_DIR" 2>/dev/null || true
+    export XDG_CACHE_HOME="$GUPAX_CACHE_DIR"
+fi
+
+XDG_RUNTIME_DIR="/tmp/runtime-${PUID}"
+if mkdir -p "$XDG_RUNTIME_DIR" 2>/dev/null; then
+    chown "$PUID:$PGID" "$XDG_RUNTIME_DIR" 2>/dev/null || true
+    chmod 700 "$XDG_RUNTIME_DIR" 2>/dev/null || true
+    export XDG_RUNTIME_DIR
+fi
+
 # Display number for Xvfb
 DISPLAY_NUM=:1
 SCREEN_RESOLUTION=${SCREEN_RESOLUTION:-1920x1080x24}
